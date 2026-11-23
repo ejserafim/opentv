@@ -147,6 +147,7 @@ object MatchdayFixtureAlerts {
         context: Context,
         fixtures: List<MatchdayFixture>,
         club: String?,
+        leagueLoaded: Boolean = true,
     ): Int {
         val p = prefs(context)
         val now = System.currentTimeMillis()
@@ -162,8 +163,12 @@ object MatchdayFixtureAlerts {
             val fixtureKey = entryKey.removePrefix(ALERT_PREFIX)
             val matching = byKey[fixtureKey]
             if (matching == null) {
-                p.edit().remove(entryKey).apply()
-                cancelAlarm(context, fixtureKey)
+                // Se a Liga não carregou, não destruir avisos válidos do campeonato.
+                // Ao desativar ou mudar de clube os avisos automáticos são limpos.
+                if (leagueLoaded || club == null) {
+                    p.edit().remove(entryKey).apply()
+                    cancelAlarm(context, fixtureKey)
+                }
             } else {
                 val actualStart = kickoffMillis(matching) ?: continue
                 if (saved.optLong("kickoff") != actualStart) {
@@ -182,6 +187,18 @@ object MatchdayFixtureAlerts {
     }
 
     /** Reposição após reinício: o Android apaga todos os alarmes num reboot. */
+    /** Ao mudar de clube, cancelar apenas os avisos AUTOMÁTICOS anteriores. */
+    fun cancelAutomaticReminders(context: Context) {
+        val p = prefs(context)
+        for ((key, value) in p.all) {
+            if (!key.startsWith(ALERT_PREFIX)) continue
+            val saved = runCatching { JSONObject(value as String) }.getOrNull() ?: continue
+            if (!saved.optBoolean("automatic")) continue
+            p.edit().remove(key).apply()
+            cancelAlarm(context, key.removePrefix(ALERT_PREFIX))
+        }
+    }
+
     fun reschedule(context: Context) {
         val p = prefs(context)
         val now = System.currentTimeMillis()
