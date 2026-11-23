@@ -1,12 +1,11 @@
 /*
- * Matchday Play — navegação móvel para telefones e tablets Android.
- * Derivado de OpenTV sob GPL-3.0-or-later.
+ * Matchday Play — navegação móvel com página Início.
+ * OpenTV GPL-3.0-or-later.
  */
 package app.opentv.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +14,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Person
@@ -28,15 +32,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,6 +55,14 @@ import app.opentv.ui.vod.SeriesScreen
 
 private val Accent = Color(0xFF36F34B)
 private val Background = Color(0xFF06121D)
+
+private enum class MobileTab(val label: String) {
+    START("Início"),
+    LIVE("TV"),
+    MOVIES("Filmes"),
+    SHOWS("Séries"),
+    RECORDINGS("Gravações"),
+}
 
 @Composable
 fun MatchdayMobileMainScreen(
@@ -69,26 +80,25 @@ fun MatchdayMobileMainScreen(
     onPlayRecording: (Recording) -> Unit,
     onPlayCatchup: (mediaKey: String, url: String, title: String, ua: String) -> Unit,
 ) {
-    val context = LocalContext.current
-    val settings = remember { AppSettings.get(context) }
+    val settings = remember { AppSettings.get(androidx.compose.ui.platform.LocalContext.current) }
     val liveEnabled by settings.liveEnabled.collectAsState()
     val moviesEnabled by settings.moviesEnabled.collectAsState()
     val seriesEnabled by settings.seriesEnabled.collectAsState()
     val tabs = remember(liveEnabled, moviesEnabled, seriesEnabled) {
         buildList {
-            if (liveEnabled) add(Tab.LIVE)
-            if (moviesEnabled) add(Tab.MOVIES)
-            if (seriesEnabled) add(Tab.SHOWS)
-            add(Tab.RECORDINGS)
+            add(MobileTab.START)
+            if (liveEnabled) add(MobileTab.LIVE)
+            if (moviesEnabled) add(MobileTab.MOVIES)
+            if (seriesEnabled) add(MobileTab.SHOWS)
+            add(MobileTab.RECORDINGS)
         }
     }
-    // Preservar o separador: ao sair de um filme, volta à secção Filmes e não à TV.
-    var currentName by rememberSaveable { mutableStateOf(tabs.first().name) }
-    val current = tabs.firstOrNull { it.name == currentName } ?: tabs.first()
+    var currentName by rememberSaveable { mutableStateOf(MobileTab.START.name) }
+    val current = tabs.firstOrNull { it.name == currentName } ?: MobileTab.START
     LaunchedEffect(tabs) {
-        if (tabs.none { it.name == currentName }) currentName = tabs.first().name
+        if (tabs.none { it.name == currentName }) currentName = MobileTab.START.name
     }
-    BackHandler(enabled = current != tabs.first()) { currentName = tabs.first().name }
+    BackHandler(enabled = current != MobileTab.START) { currentName = MobileTab.START.name }
 
     Column(Modifier.fillMaxSize().background(Background)) {
         Row(
@@ -96,18 +106,8 @@ fun MatchdayMobileMainScreen(
                 .padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "MATCHDAY",
-                color = Color.White,
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-            )
-            Text(
-                " PLAY",
-                color = Accent,
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-            )
+            Text("MATCHDAY", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
+            Text(" PLAY", color = Accent, fontWeight = FontWeight.Black, fontSize = 18.sp)
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onOpenSearch) {
                 Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White)
@@ -121,7 +121,16 @@ fun MatchdayMobileMainScreen(
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (current) {
-                Tab.LIVE -> HomeScreen(
+                MobileTab.START -> MatchdayMobileDiscoverScreen(
+                    hasSources = hasSources,
+                    onLive = { if (liveEnabled) currentName = MobileTab.LIVE.name },
+                    onMovies = { if (moviesEnabled) currentName = MobileTab.MOVIES.name },
+                    onSeries = { if (seriesEnabled) currentName = MobileTab.SHOWS.name },
+                    onOpenMovie = onOpenMovie,
+                    onOpenSeries = onOpenSeries,
+                    onResume = onResume,
+                )
+                MobileTab.LIVE -> HomeScreen(
                     isTelevision = false,
                     hasSources = hasSources,
                     isSyncing = isSyncing,
@@ -130,37 +139,43 @@ fun MatchdayMobileMainScreen(
                     onRefresh = onRefresh,
                     onPlayCatchup = onPlayCatchup,
                 )
-                Tab.MOVIES -> MoviesScreen(
+                MobileTab.MOVIES -> MoviesScreen(
                     onOpenMovie = onOpenMovie,
                     onResume = onResume,
                     onOpenSearch = onOpenSearch,
                     hasSources = hasSources,
                     isSyncing = isSyncing,
                 )
-                Tab.SHOWS -> SeriesScreen(
+                MobileTab.SHOWS -> SeriesScreen(
                     onOpenSeries = onOpenSeries,
                     onResume = onResume,
                     onOpenSearch = onOpenSearch,
                     hasSources = hasSources,
                     isSyncing = isSyncing,
                 )
-                Tab.RECORDINGS -> RecordingsScreen(onPlay = onPlayRecording)
+                MobileTab.RECORDINGS -> RecordingsScreen(onPlay = onPlayRecording)
             }
         }
         NavigationBar(
             containerColor = Color(0xFF0D222B),
-            contentColor = Color.White,
             tonalElevation = 0.dp,
         ) {
             tabs.forEach { tab ->
+                val icon = when (tab) {
+                    MobileTab.START -> Icons.Filled.Home
+                    MobileTab.LIVE -> Icons.Filled.LiveTv
+                    MobileTab.MOVIES -> Icons.Filled.Movie
+                    MobileTab.SHOWS -> Icons.Filled.Tv
+                    MobileTab.RECORDINGS -> Icons.Filled.FiberManualRecord
+                }
                 NavigationBarItem(
                     selected = current == tab,
                     onClick = { currentName = tab.name },
-                    icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
-                    label = { Text(stringResource(tab.labelRes), maxLines = 1) },
+                    icon = { Icon(icon, contentDescription = tab.label) },
+                    label = { Text(tab.label, maxLines = 1) },
                     alwaysShowLabel = true,
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFF07140F),
+                        selectedIconColor = Background,
                         selectedTextColor = Accent,
                         indicatorColor = Accent,
                         unselectedIconColor = Color(0xFFB0C4C1),
