@@ -151,8 +151,8 @@ object MatchdayFixtureAlerts {
         val p = prefs(context)
         val now = System.currentTimeMillis()
         val relevant = if (club.isNullOrBlank()) emptyList() else fixtures.filter { fixture ->
-            fixture.home.equals(club, ignoreCase = true) ||
-                fixture.away.equals(club, ignoreCase = true)
+            // Liga Portugal usa "Sport Lisboa e Benfica"; a UEFA usa "Benfica".
+            fixture.involvesClub(club)
         }.filter { (kickoffMillis(it) ?: 0L) > now }
         val byKey = relevant.associateBy(::key)
         val autoEntries = p.all.filterKeys { it.startsWith(ALERT_PREFIX) }
