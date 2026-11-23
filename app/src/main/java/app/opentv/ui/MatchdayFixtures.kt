@@ -91,6 +91,10 @@ private fun verifiedEuropeanFixtures(season: String): List<MatchdayFixture> {
  * Se a liga estiver temporariamente indisponível, não escondemos os jogos europeus.
  */
 class MatchdayFixtureSource(private val httpClient: OkHttpClient) {
+    /** Impede apagar avisos da Liga quando o feed está indisponível. */
+    @Volatile var lastLeagueLoadSucceeded: Boolean = false
+        private set
+
     suspend fun upcoming(): List<MatchdayFixture> = withContext(Dispatchers.IO) {
         val portugal = TimeZone.getTimeZone("Europe/Lisbon")
         val calendar = Calendar.getInstance(portugal, Locale("pt", "PT"))
@@ -108,10 +112,14 @@ class MatchdayFixtureSource(private val httpClient: OkHttpClient) {
         val pattern = Regex("""\d{2}:\d{2}""")
 
         val leagueFixtures = try {
-            loadPortugalLeague(season, today, end, pattern)
+            loadPortugalLeague(season, today, end, pattern).also {
+                lastLeagueLoadSucceeded = true
+            }
         } catch (_: IOException) {
+            lastLeagueLoadSucceeded = false
             emptyList()
         } catch (_: org.json.JSONException) {
+            lastLeagueLoadSucceeded = false
             emptyList()
         }
         val european = verifiedEuropeanFixtures(season)
