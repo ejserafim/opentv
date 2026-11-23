@@ -5,6 +5,9 @@
 package app.opentv.ui
 
 import android.app.Application
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -215,13 +218,26 @@ fun MatchdayModeScreen(
     val upcoming by model.upcomingFixtures.collectAsState()
     val fixturesLoading by model.fixturesLoading.collectAsState()
     val fixturesError by model.fixturesError.collectAsState()
-    BackHandler { onBack() }
+    val context = LocalContext.current
+    var selectedFixture by remember { mutableStateOf<MatchdayFixture?>(null) }
+    var fixtureRevision by remember { mutableIntStateOf(0) }
+    BackHandler(enabled = selectedFixture == null) { onBack() }
 
     fun play(channel: Channel) {
         PlaybackQueue.items = data.channels.map {
             PlaybackQueue.Item(it.channel.id, it.channel.shownName, it.channel.logoUrl, it.channel.number)
         }
         onPlayChannel(channel)
+    }
+
+    selectedFixture?.let { fixture ->
+        MatchdayFixtureDialog(
+            fixture = fixture,
+            channels = data.channels.map { it.channel },
+            onDismiss = { selectedFixture = null },
+            onChanged = { fixtureRevision++ },
+            onPlay = { channel -> play(channel) },
+        )
     }
 
     LazyColumn(
@@ -354,10 +370,17 @@ fun MatchdayModeScreen(
             }
         } else {
             items(upcoming, key = { "fixture-" + it.date + it.home + it.away }) { fixture ->
+                val channelName = remember(fixture, fixtureRevision) {
+                    MatchdayFixtureAlerts.selectedChannelName(context, fixture)
+                }
+                val hasNotice = remember(fixture, fixtureRevision) {
+                    MatchdayFixtureAlerts.hasReminder(context, fixture)
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 14.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(MatchCard)
+                        .clickable { selectedFixture = fixture }
                         .padding(horizontal = 14.dp, vertical = 15.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -394,8 +417,25 @@ fun MatchdayModeScreen(
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
                         )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            channelName?.let { "Escolhido: " + it }
+                                ?: "Escolher canal · Ativar aviso",
+                            color = if (hasNotice || channelName != null) MatchGreen else MatchMuted,
+                            fontSize = 11.sp,
+                            maxLines = 2,
+                        )
                     }
-                    Icon(Icons.Filled.SportsSoccer, contentDescription = null, tint = MatchGreen)
+                    if (hasNotice) {
+                        Icon(
+                            Icons.Filled.NotificationsActive,
+                            contentDescription = "Aviso ativo",
+                            tint = MatchGreen,
+                            modifier = Modifier.size(19.dp),
+                        )
+                        Spacer(Modifier.width(5.dp))
+                    }
+                    Icon(Icons.Filled.ChevronRight, contentDescription = "Abrir jogo", tint = MatchGreen)
                 }
             }
         }

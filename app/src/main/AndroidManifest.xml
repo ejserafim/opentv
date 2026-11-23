@@ -124,6 +124,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- Lembretes de futebol independentes do EPG, reagendados após reinício. -->
+        <receiver
+            android:name=".ui.MatchdayFixtureAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Serves the downloaded update APK to the system installer via a content:// uri. -->
         <provider
             android:name="androidx.core.content.FileProvider"
