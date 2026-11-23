@@ -95,6 +95,9 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
     private val graph = ServiceLocator.get(app)
     private val settings = AppSettings.get(app)
     val categoryKey = MutableStateFlow<String?>(null)
+    // O filtro dos jogos é independente do filtro dos canais e fica guardado.
+    private val clubFilterPrefs = app.getSharedPreferences("matchday_club_preferences", 0)
+    val onlyMyClubGames = MutableStateFlow(clubFilterPrefs.getBoolean("only_my_club_games", false))
     val favouritesOnly = MutableStateFlow(false)
     private val pickerQuery = MutableStateFlow("")
     private val fixtureSource = MatchdayFixtureSource(graph.httpClient)
@@ -271,6 +274,10 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun choose(key: String?) { categoryKey.value = key }
     fun toggleFilter() { favouritesOnly.value = !favouritesOnly.value }
+    fun toggleClubGamesFilter() {
+        onlyMyClubGames.value = !onlyMyClubGames.value
+        clubPrefs.edit().putBoolean("only_my_club_games", onlyMyClubGames.value).apply()
+    }
     fun toggleStar(item: MatchChannel) {
         viewModelScope.launch {
             val wantFavourite = !item.channel.favourite
@@ -288,6 +295,7 @@ fun MatchdayModeScreen(
     val cats by model.categories.collectAsState()
     val choice by model.categoryKey.collectAsState()
     val onlyFavourites by model.favouritesOnly.collectAsState()
+    val onlyMyClubGames by model.onlyMyClubGames.collectAsState()
     val data by model.snapshot.collectAsState()
     val upcoming by model.upcomingFixtures.collectAsState()
     val fixturesLoading by model.fixturesLoading.collectAsState()
@@ -297,6 +305,17 @@ fun MatchdayModeScreen(
     val clubAlertsCount by model.clubAlertsCount.collectAsState()
     val searchChannels by model.pickerResults.collectAsState()
     val context = LocalContext.current
+    // Não altera os lembretes. Filtra apenas o que é mostrado no ecrã.
+    val displayedFixtures = remember(upcoming, favoriteClub, onlyMyClubGames) {
+        if (onlyMyClubGames && !favoriteClub.isNullOrBlank()) {
+            upcoming.filter { it.involvesClub(favoriteClub!!) }
+        } else upcoming
+    }
+    val displayedEpgEvents = remember(data.events, favoriteClub, onlyMyClubGames) {
+        if (onlyMyClubGames && !favoriteClub.isNullOrBlank()) {
+            data.events.filter { matchdayProgrammeMentionsClub(it.item.title, favoriteClub!!) }
+        } else data.events
+    }
     var selectedFixture by remember { mutableStateOf<MatchdayFixture?>(null) }
     var fixtureRevision by remember { mutableIntStateOf(0) }
     var clubPickerOpen by remember { mutableStateOf(false) }
@@ -545,17 +564,6 @@ fun MatchdayModeScreen(
                         )
                     }
                 }
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Apenas favoritos", color = MatchMuted, modifier = Modifier.weight(1f))
-                    FilterChip(
-                        selected = onlyFavourites,
-                        onClick = model::toggleFilter,
-                        label = { Text(if (onlyFavourites) "Ativo" else "Todos") },
-                    )
-                }
             }
         }
 
@@ -578,6 +586,33 @@ fun MatchdayModeScreen(
                     color = MatchMuted,
                     fontSize = 12.sp,
                 )
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Só jogos do meu clube",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            if (favoriteClub == null) "Escolhe primeiro um clube acima"
+                            else if (onlyMyClubGames) favoriteClub!!
+                            else "Mostrar todas as equipas",
+                            color = MatchMuted,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                        )
+                    }
+                    FilterChip(
+                        selected = onlyMyClubGames && favoriteClub != null,
+                        onClick = model::toggleClubGamesFilter,
+                        enabled = favoriteClub != null,
+                        label = { Text(if (onlyMyClubGames && favoriteClub != null) "Ativo" else "Todos") },
+                    )
+                }
             }
         }
         if (upcoming.isEmpty()) {
@@ -611,8 +646,29 @@ fun MatchdayModeScreen(
                     }
                 }
             }
+        } else if (displayedFixtures.isEmpty()) {
+            item(key = "fixtures-filter-empty") {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MatchCard)
+                        .padding(16.dp),
+                ) {
+                    Text(
+                        "Não há jogos do teu clube nos próximos 21 dias.",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Podes voltar a 'Todos' para consultar a agenda completa.",
+                        color = MatchMuted,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
         } else {
-            items(upcoming, key = { "fixture-" + it.date + it.home + it.away }) { fixture ->
+            items(displayedFixtures, key = { "fixture-" + it.date + it.home + it.away }) { fixture ->
                 val channelName = remember(fixture, fixtureRevision) {
                     MatchdayFixtureAlerts.selectedChannelName(context, fixture)
                 }
@@ -719,14 +775,17 @@ fun MatchdayModeScreen(
                 Text("Informação EPG do teu fornecedor IPTV", color = MatchMuted, fontSize = 12.sp)
             }
         }
-        if (data.events.isEmpty()) {
+        if (displayedEpgEvents.isEmpty()) {
             item {
                 Column(
                     Modifier.fillMaxWidth().padding(horizontal = 14.dp)
                         .clip(RoundedCornerShape(14.dp)).background(MatchCard).padding(16.dp),
                 ) {
                     Text(
-                        if (!data.ready) "A consultar o guia…" else "Nenhum jogo identificado neste momento.",
+                        if (!data.ready) "A consultar o guia…"
+                        else if (onlyMyClubGames && favoriteClub != null)
+                            "Sem jogos do teu clube identificados no guia."
+                        else "Nenhum jogo identificado neste momento.",
                         color = Color.White, fontWeight = FontWeight.Bold,
                     )
                     Spacer(Modifier.height(5.dp))
@@ -737,7 +796,7 @@ fun MatchdayModeScreen(
                 }
             }
         } else {
-            items(data.events, key = { "event-" + it.channel.id + "-" + it.item.id }) { event ->
+            items(displayedEpgEvents, key = { "event-" + it.channel.id + "-" + it.item.id }) { event ->
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 14.dp)
                         .clip(RoundedCornerShape(14.dp)).background(MatchCard)
@@ -762,11 +821,30 @@ fun MatchdayModeScreen(
             }
         }
         item {
-            Text(
-                "Canais desportivos",
-                color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    "Canais desportivos",
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        "Só canais favoritos",
+                        color = MatchMuted,
+                        modifier = Modifier.weight(1f),
+                        fontSize = 13.sp,
+                    )
+                    FilterChip(
+                        selected = onlyFavourites,
+                        onClick = model::toggleFilter,
+                        label = { Text(if (onlyFavourites) "Ativo" else "Todos") },
+                    )
+                }
+            }
         }
         if (data.channels.isEmpty()) {
             item {
