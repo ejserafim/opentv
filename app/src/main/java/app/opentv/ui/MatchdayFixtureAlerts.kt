@@ -31,6 +31,7 @@ object MatchdayFixtureAlerts {
     private const val ALERT_PREFIX = "alert_"
     private const val CHANNEL_PREFIX = "channel_"
     private const val CHANNEL_NAME_PREFIX = "channel_name_"
+    private const val AUTO_SKIP_PREFIX = "skip_auto_"
     private const val NOTIFICATION_CHANNEL = "matchday_games"
 
     fun key(fixture: MatchdayFixture): String =
@@ -91,7 +92,7 @@ object MatchdayFixtureAlerts {
     fun hasReminder(context: Context, fixture: MatchdayFixture): Boolean =
         prefs(context).contains(ALERT_PREFIX + key(fixture))
 
-    fun setReminder(context: Context, fixture: MatchdayFixture): Boolean {
+    fun setReminder(context: Context, fixture: MatchdayFixture, automatic: Boolean = false): Boolean {
         val kickoff = kickoffMillis(fixture) ?: return false
         val now = System.currentTimeMillis()
         if (kickoff <= now) return false
@@ -103,17 +104,81 @@ object MatchdayFixtureAlerts {
             put("kickoff", kickoff)
             put("fireAt", fireAt)
             put("channelId", selectedChannelId(context, fixture) ?: -1L)
+            put("automatic", automatic)
         }
-        prefs(context).edit().putString(ALERT_PREFIX + id, payload.toString()).apply()
+        val edit = prefs(context).edit().putString(ALERT_PREFIX + id, payload.toString())
+        if (!automatic) edit.remove(AUTO_SKIP_PREFIX + id)
+        edit.apply()
         schedule(context, payload)
         return true
     }
 
     fun cancelReminder(context: Context, fixture: MatchdayFixture) {
         val id = key(fixture)
-        prefs(context).edit().remove(ALERT_PREFIX + id).apply()
+        val p = prefs(context)
+        val previouslyAutomatic = p.getString(ALERT_PREFIX + id, null)?.let {
+            runCatching { JSONObject(it).optBoolean("automatic") }.getOrDefault(false)
+        } ?: false
+        val edit = p.edit().remove(ALERT_PREFIX + id)
+        // Se o utilizador cancelar um aviso automático, respeitar a decisão.
+        if (previouslyAutomatic) edit.putBoolean(AUTO_SKIP_PREFIX + id, true)
+        edit.apply()
+        cancelAlarm(context, id)
+    }
+
+    private fun cancelAlarm(context: Context, key: String) {
         val alarms = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarms.cancel(pending(context, id))
+        alarms.cancel(pending(context, key))
+    }
+
+    /** Permite reativar alertas anteriormente cancelados ao optar novamente por avisos automáticos. */
+    fun resetAutomaticSkips(context: Context) {
+        val p = prefs(context)
+        val edit = p.edit()
+        p.all.keys.filter { it.startsWith(AUTO_SKIP_PREFIX) }.forEach(edit::remove)
+        edit.apply()
+    }
+
+    /**
+     * Agenda os próximos jogos do clube escolhido sem alterar alertas manuais.
+     * Ao desligar ou mudar de clube remove APENAS avisos marcados como automáticos.
+     */
+    fun synchronizeAutomatic(
+        context: Context,
+        fixtures: List<MatchdayFixture>,
+        club: String?,
+    ): Int {
+        val p = prefs(context)
+        val now = System.currentTimeMillis()
+        val relevant = if (club.isNullOrBlank()) emptyList() else fixtures.filter { fixture ->
+            fixture.home.equals(club, ignoreCase = true) ||
+                fixture.away.equals(club, ignoreCase = true)
+        }.filter { (kickoffMillis(it) ?: 0L) > now }
+        val byKey = relevant.associateBy(::key)
+        val autoEntries = p.all.filterKeys { it.startsWith(ALERT_PREFIX) }
+        for ((entryKey, raw) in autoEntries) {
+            val saved = runCatching { JSONObject(raw as String) }.getOrNull() ?: continue
+            if (!saved.optBoolean("automatic")) continue
+            val fixtureKey = entryKey.removePrefix(ALERT_PREFIX)
+            val matching = byKey[fixtureKey]
+            if (matching == null) {
+                p.edit().remove(entryKey).apply()
+                cancelAlarm(context, fixtureKey)
+            } else {
+                val actualStart = kickoffMillis(matching) ?: continue
+                if (saved.optLong("kickoff") != actualStart) {
+                    setReminder(context, matching, automatic = true)
+                }
+            }
+        }
+        for (fixture in relevant) {
+            val fixtureKey = key(fixture)
+            if (p.getBoolean(AUTO_SKIP_PREFIX + fixtureKey, false)) continue
+            if (!hasReminder(context, fixture)) {
+                setReminder(context, fixture, automatic = true)
+            }
+        }
+        return relevant.count { hasReminder(context, it) }
     }
 
     /** Reposição após reinício: o Android apaga todos os alarmes num reboot. */
