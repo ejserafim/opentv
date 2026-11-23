@@ -143,7 +143,7 @@ fun MatchdayMobileChannels(
         } else {
             if (rows.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    if (isSyncing || channelsPresent == null || (channelsPresent && !favouritesOnly)) {
+                    if (isSyncing || channelsPresent == null || (channelsPresent == true && !favouritesOnly)) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator(color = Green)
                             Spacer(Modifier.height(14.dp))
