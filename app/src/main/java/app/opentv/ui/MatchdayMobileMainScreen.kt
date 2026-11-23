@@ -58,6 +58,7 @@ private val Background = Color(0xFF06121D)
 
 private enum class MobileTab(val label: String) {
     START("Início"),
+    MATCHDAY("Matchday"),
     LIVE("TV"),
     MOVIES("Filmes"),
     SHOWS("Séries"),
@@ -95,9 +96,9 @@ fun MatchdayMobileMainScreen(
         }
     }
     var currentName by rememberSaveable { mutableStateOf(MobileTab.START.name) }
-    val current = tabs.firstOrNull { it.name == currentName } ?: MobileTab.START
+    val current = MobileTab.values().firstOrNull { it.name == currentName } ?: MobileTab.START
     LaunchedEffect(tabs) {
-        if (tabs.none { it.name == currentName }) currentName = MobileTab.START.name
+        if (currentName != MobileTab.MATCHDAY.name && tabs.none { it.name == currentName }) currentName = MobileTab.START.name
     }
     BackHandler(enabled = current != MobileTab.START) { currentName = MobileTab.START.name }
 
@@ -124,12 +125,17 @@ fun MatchdayMobileMainScreen(
             when (current) {
                 MobileTab.START -> MatchdayMobileDiscoverScreen(
                     hasSources = hasSources,
+                    onMatchday = { currentName = MobileTab.MATCHDAY.name },
                     onLive = { if (liveEnabled) currentName = MobileTab.LIVE.name },
                     onMovies = { if (moviesEnabled) currentName = MobileTab.MOVIES.name },
                     onSeries = { if (seriesEnabled) currentName = MobileTab.SHOWS.name },
                     onOpenMovie = onOpenMovie,
                     onOpenSeries = onOpenSeries,
                     onResume = onResume,
+                )
+                MobileTab.MATCHDAY -> MatchdayModeScreen(
+                    onBack = { currentName = MobileTab.START.name },
+                    onPlayChannel = onPlayChannel,
                 )
                 MobileTab.LIVE -> HomeScreen(
                     isTelevision = false,
@@ -164,6 +170,7 @@ fun MatchdayMobileMainScreen(
             tabs.forEach { tab ->
                 val icon = when (tab) {
                     MobileTab.START -> Icons.Filled.Home
+                    MobileTab.MATCHDAY -> Icons.Filled.LiveTv
                     MobileTab.LIVE -> Icons.Filled.LiveTv
                     MobileTab.MOVIES -> Icons.Filled.Movie
                     MobileTab.SHOWS -> Icons.Filled.Tv

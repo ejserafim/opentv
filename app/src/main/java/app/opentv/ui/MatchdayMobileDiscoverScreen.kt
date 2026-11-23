@@ -62,6 +62,7 @@ private val Muted = Color(0xFFB6C8C4)
 @Composable
 fun MatchdayMobileDiscoverScreen(
     hasSources: Boolean,
+    onMatchday: () -> Unit,
     onLive: () -> Unit,
     onMovies: () -> Unit,
     onSeries: () -> Unit,
@@ -168,6 +169,42 @@ fun MatchdayMobileDiscoverScreen(
                         }
                     }
                 }
+            }
+        }
+        item(key = "matchday-card") {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 14.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Brush.horizontalGradient(listOf(Color(0xFF114C2A), Color(0xFF102A32))))
+                    .clickable(onClick = onMatchday)
+                    .padding(horizontal = 17.dp, vertical = 17.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.LiveTv,
+                    contentDescription = null,
+                    tint = Green,
+                    modifier = Modifier.size(34.dp),
+                )
+                Spacer(Modifier.width(13.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "MATCHDAY MODE",
+                        color = Green,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Black,
+                    )
+                    Text(
+                        "Agenda de futebol · Canais em direto",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                    )
+                }
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = "Abrir Matchday Mode",
+                    tint = Color.White,
+                )
             }
         }
         item(key = "shortcuts") {
