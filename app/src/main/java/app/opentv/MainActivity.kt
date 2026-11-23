@@ -533,7 +533,7 @@ private fun OpenTvApp(isTelevision: Boolean) {
         // O botão físico/gesto de Voltar continua funcional; no telemóvel há também uma
         // seta sempre acessível em reprodução e nas páginas de detalhe.
         if (!isTelevision && currentEntry?.destination?.route in setOf(
-                Routes.PLAYER, Routes.VOD_PLAYER, Routes.MOVIE_DETAIL, Routes.SERIES_DETAIL,
+                Routes.MOVIE_DETAIL, Routes.SERIES_DETAIL,
             )
         ) {
             MatchdayMobileBackOverlay(onBack = { navController.popBackStack() })

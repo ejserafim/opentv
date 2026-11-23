@@ -89,6 +89,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import app.opentv.R
 import app.opentv.isRunningOnTelevision
+import app.opentv.ui.MatchdayMobileBackOverlay
 import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
@@ -339,6 +340,11 @@ fun VodPlayerScreen(
                 }
 
             else -> Unit
+        }
+
+        // Os controlos de filme/série e o botão Voltar partilham visibilidade.
+        if (!isTelevision && controlsVisible) {
+            MatchdayMobileBackOverlay(onBack = onBack)
         }
 
         AnimatedVisibility(

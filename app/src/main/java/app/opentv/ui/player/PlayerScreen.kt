@@ -97,6 +97,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.opentv.R
 import app.opentv.isRunningOnTelevision
+import app.opentv.ui.MatchdayMobileBackOverlay
 import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
@@ -590,6 +591,11 @@ fun PlayerScreen(
                     }
                 }
             }
+        }
+
+        // Em mobile, a seta aparece e desaparece com os controlos do leitor.
+        if (!isTelevision && controlsVisible && !inPip) {
+            MatchdayMobileBackOverlay(onBack = { controller.stop(); onBack() })
         }
 
         // Left-side transparent channel list — d-pad Left opens it, pick a channel to switch.
