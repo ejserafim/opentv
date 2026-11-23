@@ -12,7 +12,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -291,11 +290,80 @@ fun MatchdayModeScreen(
     val upcoming by model.upcomingFixtures.collectAsState()
     val fixturesLoading by model.fixturesLoading.collectAsState()
     val fixturesError by model.fixturesError.collectAsState()
+    val favoriteClub by model.favoriteClub.collectAsState()
+    val autoClubAlerts by model.autoClubAlerts.collectAsState()
+    val clubAlertsCount by model.clubAlertsCount.collectAsState()
     val searchChannels by model.pickerResults.collectAsState()
     val context = LocalContext.current
     var selectedFixture by remember { mutableStateOf<MatchdayFixture?>(null) }
     var fixtureRevision by remember { mutableIntStateOf(0) }
-    BackHandler(enabled = selectedFixture == null) { onBack() }
+    var clubPickerOpen by remember { mutableStateOf(false) }
+    val availableClubs = remember(upcoming) {
+        upcoming.flatMap { listOf(it.home, it.away) }.distinct()
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+    val askNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            model.enableAutomaticClubAlerts(true)
+        } else {
+            Toast.makeText(context, "Autoriza as notificações para receber avisos.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun toggleAutomaticAlerts(enabled: Boolean) {
+        if (!enabled) {
+            model.enableAutomaticClubAlerts(false)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            model.enableAutomaticClubAlerts(true)
+        }
+    }
+
+    if (clubPickerOpen) {
+        AlertDialog(
+            onDismissRequest = { clubPickerOpen = false },
+            title = { Text("Qual é o teu clube?") },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                    items(availableClubs, key = { it }) { club ->
+                        TextButton(
+                            onClick = {
+                                model.chooseFavoriteClub(club)
+                                clubPickerOpen = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                club,
+                                color = if (club == favoriteClub) MatchGreen else Color.White,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    if (favoriteClub != null) {
+                        item {
+                            TextButton(
+                                onClick = {
+                                    model.chooseFavoriteClub(null)
+                                    clubPickerOpen = false
+                                },
+                            ) { Text("Deixar de seguir o clube", color = MatchMuted) }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { clubPickerOpen = false }) { Text("Fechar") }
+            },
+        )
+    }
+
+    BackHandler(enabled = selectedFixture == null && !clubPickerOpen) { onBack() }
 
     fun play(channel: Channel) {
         PlaybackQueue.items = data.channels.map {
@@ -351,6 +419,93 @@ fun MatchdayModeScreen(
                     color = MatchMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 14.dp),
+                )
+            }
+        }
+        item(key = "club-follow") {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = 14.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFF164A32), Color(0xFF132A32)),
+                        ),
+                    ).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.SportsSoccer,
+                        contentDescription = null,
+                        tint = MatchGreen,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Spacer(Modifier.width(9.dp))
+                    Text(
+                        "O MEU CLUBE",
+                        color = MatchGreen,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp,
+                    )
+                }
+                Text(
+                    favoriteClub ?: "Ainda não escolheste um clube.",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    maxLines = 2,
+                )
+                OutlinedButton(
+                    onClick = { clubPickerOpen = true },
+                    enabled = availableClubs.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (favoriteClub == null) "Escolher clube da Liga Portugal" else "Mudar clube")
+                }
+                if (availableClubs.isEmpty()) {
+                    Text(
+                        "Os clubes ficam disponíveis quando o calendário for carregado.",
+                        color = MatchMuted,
+                        fontSize = 12.sp,
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Avisos automáticos",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "15 min antes dos jogos do teu clube",
+                            color = MatchMuted,
+                            fontSize = 12.sp,
+                        )
+                    }
+                    Switch(
+                        checked = autoClubAlerts,
+                        onCheckedChange = ::toggleAutomaticAlerts,
+                        enabled = favoriteClub != null,
+                    )
+                }
+                if (autoClubAlerts) {
+                    Text(
+                        if (clubAlertsCount == 0)
+                            "Sem jogos com hora confirmada para criar avisos."
+                        else "$clubAlertsCount jogo(s) com aviso programado.",
+                        color = MatchGreen,
+                        fontSize = 12.sp,
+                    )
+                }
+                Text(
+                    "Começamos pela Liga Portugal. O calendário é atualizado quando abres o Matchday Mode; " +
+                        "horários sujeitos a alterações.",
+                    color = MatchMuted,
+                    fontSize = 11.sp,
                 )
             }
         }
