@@ -96,6 +96,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.opentv.R
+import app.opentv.isRunningOnTelevision
 import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
@@ -134,6 +135,7 @@ fun PlayerScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val isTelevision = remember(context) { isRunningOnTelevision(context) }
     val view = LocalView.current
     val graph = remember { ServiceLocator.get(context) }
     val settings = remember { graph.settings }
@@ -324,13 +326,20 @@ fun PlayerScreen(
     // so it never traps you, but it also no longer throws you all the way to the guide just because
     // you wanted to dismiss the bar.
     BackHandler {
-        when {
-            channelListVisible -> channelListVisible = false
-            panel != Panel.NONE -> panel = Panel.NONE
-            controlsVisible -> controlsVisible = false
-            else -> {
-                controller.stop()
-                onBack()
+        if (!isTelevision) {
+            // No Android móvel, um gesto Voltar deve sair logo da reprodução.
+            // Na televisão, mantém a lógica original de fechar primeiro os painéis.
+            controller.stop()
+            onBack()
+        } else {
+            when {
+                channelListVisible -> channelListVisible = false
+                panel != Panel.NONE -> panel = Panel.NONE
+                controlsVisible -> controlsVisible = false
+                else -> {
+                    controller.stop()
+                    onBack()
+                }
             }
         }
     }

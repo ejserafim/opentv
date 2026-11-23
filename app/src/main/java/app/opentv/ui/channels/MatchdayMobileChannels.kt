@@ -37,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,7 +71,7 @@ fun MatchdayMobileChannels(
     val rows by viewModel.rows.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val favouritesOnly by viewModel.favouritesOnly.collectAsState()
-    var showingChannels by remember { mutableStateOf(false) }
+    var showingChannels by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = showingChannels) { showingChannels = false }
 
     val currentLabel = when {

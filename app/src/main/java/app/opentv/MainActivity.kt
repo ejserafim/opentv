@@ -52,6 +52,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import app.opentv.core.AppSettings
@@ -70,6 +71,8 @@ import app.opentv.ui.settings.AppSettingsScreen
 import app.opentv.ui.settings.EpgSettingsScreen
 import app.opentv.ui.settings.ParentalControlsScreen
 import app.opentv.ui.settings.ProfilesScreen
+import app.opentv.ui.settings.MatchdayMobileProfilesScreen
+import app.opentv.ui.MatchdayMobileBackOverlay
 import app.opentv.ui.settings.ProvidersScreen
 import app.opentv.ui.settings.StremioAddonsScreen
 import app.opentv.ui.settings.RecordingSettingsScreen
@@ -226,6 +229,7 @@ object Routes {
 @Composable
 private fun OpenTvApp(isTelevision: Boolean) {
     val navController = rememberNavController()
+    val currentEntry by navController.currentBackStackEntryAsState()
     val sourcesViewModel: SourcesViewModel = viewModel()
     val vodViewModel: VodViewModel = viewModel()
     val profilesViewModel: ProfilesViewModel = viewModel()
@@ -371,10 +375,17 @@ private fun OpenTvApp(isTelevision: Boolean) {
             }
 
             composable(Routes.PROFILES) {
-                ProfilesScreen(
-                    viewModel = profilesViewModel,
-                    onBack = { navController.popBackStack() },
-                )
+                if (isTelevision) {
+                    ProfilesScreen(
+                        viewModel = profilesViewModel,
+                        onBack = { navController.popBackStack() },
+                    )
+                } else {
+                    MatchdayMobileProfilesScreen(
+                        viewModel = profilesViewModel,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
 
             composable(Routes.SEARCH) {
@@ -518,6 +529,15 @@ private fun OpenTvApp(isTelevision: Boolean) {
 
         // Sits above the whole nav graph so a found update can prompt from any screen.
         // Matchday Play has its own release process; do not offer upstream OpenTV APKs.
+
+        // O botão físico/gesto de Voltar continua funcional; no telemóvel há também uma
+        // seta sempre acessível em reprodução e nas páginas de detalhe.
+        if (!isTelevision && currentEntry?.destination?.route in setOf(
+                Routes.PLAYER, Routes.VOD_PLAYER, Routes.MOVIE_DETAIL, Routes.SERIES_DETAIL,
+            )
+        ) {
+            MatchdayMobileBackOverlay(onBack = { navController.popBackStack() })
+        }
 
         // "About to switch to a recording" banner — shows 30s before an auto-switch fires.
         RecordingSwitchBanner()

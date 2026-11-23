@@ -88,6 +88,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import app.opentv.R
+import app.opentv.isRunningOnTelevision
 import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
@@ -118,6 +119,7 @@ fun VodPlayerScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val isTelevision = remember(context) { isRunningOnTelevision(context) }
     val view = LocalView.current
     val graph = remember { ServiceLocator.get(context) }
     val settings = remember { graph.settings }
@@ -261,12 +263,17 @@ fun VodPlayerScreen(
     }
 
     BackHandler {
-        val activelyPlaying = state is PlayerController.State.Playing ||
-            (growingRec && state is PlayerController.State.Buffering)
-        when {
-            vodPanel != VodPanel.NONE -> vodPanel = VodPanel.NONE
-            controlsVisible && activelyPlaying && !paused -> controlsVisible = false
-            else -> onBack()
+        if (!isTelevision) {
+            // Nos telemóveis o botão Voltar regressa imediatamente ao filme ou episódio.
+            onBack()
+        } else {
+            val activelyPlaying = state is PlayerController.State.Playing ||
+                (growingRec && state is PlayerController.State.Buffering)
+            when {
+                vodPanel != VodPanel.NONE -> vodPanel = VodPanel.NONE
+                controlsVisible && activelyPlaying && !paused -> controlsVisible = false
+                else -> onBack()
+            }
         }
     }
 

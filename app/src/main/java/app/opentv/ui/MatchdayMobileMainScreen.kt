@@ -30,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,11 +82,13 @@ fun MatchdayMobileMainScreen(
             add(Tab.RECORDINGS)
         }
     }
-    var current by remember { mutableStateOf(tabs.first()) }
+    // Preservar o separador: ao sair de um filme, volta à secção Filmes e não à TV.
+    var currentName by rememberSaveable { mutableStateOf(tabs.first().name) }
+    val current = tabs.firstOrNull { it.name == currentName } ?: tabs.first()
     LaunchedEffect(tabs) {
-        if (current !in tabs) current = tabs.first()
+        if (tabs.none { it.name == currentName }) currentName = tabs.first().name
     }
-    BackHandler(enabled = current != tabs.first()) { current = tabs.first() }
+    BackHandler(enabled = current != tabs.first()) { currentName = tabs.first().name }
 
     Column(Modifier.fillMaxSize().background(Background)) {
         Row(
@@ -152,7 +155,7 @@ fun MatchdayMobileMainScreen(
             tabs.forEach { tab ->
                 NavigationBarItem(
                     selected = current == tab,
-                    onClick = { current = tab },
+                    onClick = { currentName = tab.name },
                     icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
                     label = { Text(stringResource(tab.labelRes), maxLines = 1) },
                     alwaysShowLabel = true,
