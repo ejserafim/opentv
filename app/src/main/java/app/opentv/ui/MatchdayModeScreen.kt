@@ -142,6 +142,7 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
             autoClubAlerts.value = false
             clubPrefs.edit().putBoolean("automatic_alerts", false).apply()
         }
+        MatchdayFixtureAlerts.cancelAutomaticReminders(getApplication())
         MatchdayFixtureAlerts.resetAutomaticSkips(getApplication())
         syncClubAlerts()
     }
@@ -162,6 +163,7 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             clubAlertsCount.value = MatchdayFixtureAlerts.synchronizeAutomatic(
                 getApplication(), games, club,
+                leagueLoaded = fixtureSource.lastLeagueLoadSucceeded,
             )
         }
     }
