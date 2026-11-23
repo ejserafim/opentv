@@ -80,7 +80,8 @@ fun MatchdayMobileMainScreen(
     onPlayRecording: (Recording) -> Unit,
     onPlayCatchup: (mediaKey: String, url: String, title: String, ua: String) -> Unit,
 ) {
-    val settings = remember { AppSettings.get(androidx.compose.ui.platform.LocalContext.current) }
+    val context = LocalContext.current
+    val settings = remember(context) { AppSettings.get(context) }
     val liveEnabled by settings.liveEnabled.collectAsState()
     val moviesEnabled by settings.moviesEnabled.collectAsState()
     val seriesEnabled by settings.seriesEnabled.collectAsState()
