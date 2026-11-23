@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import app.opentv.core.ServiceLocator
 import app.opentv.data.model.Channel
 import app.opentv.data.model.shownName
 
@@ -78,6 +80,11 @@ fun MatchdayFixtureDialog(
     }
     val chosenName = remember(fixture, revision) {
         MatchdayFixtureAlerts.selectedChannelName(context, fixture)
+    }
+    // A associação pode apontar a um canal de outra categoria (ex.: PORTUGAL),
+    // que não aparece na lista desportiva do Matchday Mode.
+    val assignedChannel by produceState<Channel?>(initialValue = null, key1 = chosenId) {
+        value = chosenId?.let { ServiceLocator.get(context).catalogRepository.channel(it) }
     }
     val reminderOn = remember(fixture, revision) {
         MatchdayFixtureAlerts.hasReminder(context, fixture)
@@ -194,7 +201,7 @@ fun MatchdayFixtureDialog(
                 if (chosenId != null) {
                     Text("CANAL GUARDADO POR TI", color = Highlight, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     Text(chosenName ?: "Canal selecionado", color = Color.White, fontWeight = FontWeight.Bold)
-                    val active = channels.firstOrNull { it.id == chosenId }
+                    val active = assignedChannel ?: channels.firstOrNull { it.id == chosenId }
                     if (active != null) {
                         Button(
                             onClick = { onPlay(active); onDismiss() },
