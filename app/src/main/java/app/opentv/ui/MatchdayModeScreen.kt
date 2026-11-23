@@ -50,6 +50,7 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
@@ -89,6 +90,7 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
     private val settings = AppSettings.get(app)
     val categoryKey = MutableStateFlow<String?>(null)
     val favouritesOnly = MutableStateFlow(false)
+    private val pickerQuery = MutableStateFlow("")
     private val fixtureSource = MatchdayFixtureSource(graph.httpClient)
     val upcomingFixtures = MutableStateFlow<List<MatchdayFixture>>(emptyList())
     val fixturesLoading = MutableStateFlow(false)
@@ -139,6 +141,33 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
     }.flowOn(Dispatchers.Default).stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList(),
     )
+
+    /**
+     * Pesquisa qualquer canal do catálogo, mesmo quando o fornecedor agrupa os canais
+     * desportivos em "PORTUGAL", "EXCLUSIVOS" etc. Nunca expõe categorias bloqueadas.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+    val pickerResults: StateFlow<List<Channel>> = combine(
+        pickerQuery.debounce(250).flatMapLatest { q ->
+            if (q.trim().length < 2) flowOf(emptyList())
+            else graph.catalogRepository.searchChannels(q.trim())
+        },
+        graph.catalogRepository.observeCategories(StreamKind.LIVE),
+        settings.hiddenCategories,
+        settings.hiddenUnlocked,
+    ) { found, allCategories, hidden, unlocked ->
+        val forbidden = if (unlocked) emptySet() else allCategories.filter { cat ->
+            val normalized = ChannelNameNormalizer.normalize(cat.name)
+            normalized.groupKey.ifBlank { cat.id } in hidden
+        }.map { it.id }.toSet()
+        found.filterNot { it.hidden || it.categoryId in forbidden }
+            .distinctBy { it.groupKey.ifBlank { "channel-" + it.id } }
+            .take(50)
+    }.flowOn(Dispatchers.Default).stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList(),
+    )
+
+    fun searchPossibleChannels(text: String) { pickerQuery.value = text }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val channels = combine(categories, categoryKey) { groups, key ->
@@ -217,6 +246,7 @@ fun MatchdayModeScreen(
     val upcoming by model.upcomingFixtures.collectAsState()
     val fixturesLoading by model.fixturesLoading.collectAsState()
     val fixturesError by model.fixturesError.collectAsState()
+    val searchChannels by model.pickerResults.collectAsState()
     val context = LocalContext.current
     var selectedFixture by remember { mutableStateOf<MatchdayFixture?>(null) }
     var fixtureRevision by remember { mutableIntStateOf(0) }
@@ -233,7 +263,12 @@ fun MatchdayModeScreen(
         MatchdayFixtureDialog(
             fixture = fixture,
             channels = data.channels.map { it.channel },
-            onDismiss = { selectedFixture = null },
+            searchResults = searchChannels,
+            onSearch = model::searchPossibleChannels,
+            onDismiss = {
+                model.searchPossibleChannels("")
+                selectedFixture = null
+            },
             onChanged = { fixtureRevision++ },
             onPlay = { channel -> play(channel) },
         )
