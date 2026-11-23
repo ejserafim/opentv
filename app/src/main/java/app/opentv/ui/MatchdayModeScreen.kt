@@ -1,13 +1,12 @@
 /*
  * Matchday Play — Matchday Mode, sobre OpenTV (GPL-3.0-or-later).
- * Eventos e horários vêm EXCLUSIVAMENTE do EPG real; nada é inventado.
+ * Agenda externa de futebol e EPG são apresentados separadamente; nada é inventado.
  */
 package app.opentv.ui
 
 import android.app.Application
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
