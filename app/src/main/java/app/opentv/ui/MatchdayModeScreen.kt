@@ -307,9 +307,7 @@ fun MatchdayModeScreen(
     val context = LocalContext.current
     // Não altera os lembretes. Filtra apenas o que é mostrado no ecrã.
     val displayedFixtures = remember(upcoming, favoriteClub, onlyMyClubGames) {
-        if (onlyMyClubGames && !favoriteClub.isNullOrBlank()) {
-            upcoming.filter { it.involvesClub(favoriteClub!!) }
-        } else upcoming
+        matchdayFixturesForClub(upcoming, favoriteClub, onlyMyClubGames)
     }
     val displayedEpgEvents = remember(data.events, favoriteClub, onlyMyClubGames) {
         if (onlyMyClubGames && !favoriteClub.isNullOrBlank()) {

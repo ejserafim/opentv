@@ -7,6 +7,8 @@ package app.opentv
 import app.opentv.ui.MatchdayFixture
 import app.opentv.ui.involvesClub
 import app.opentv.ui.matchdayTeamKey
+import app.opentv.ui.matchdayFixturesForClub
+import app.opentv.ui.matchdayProgrammeMentionsClub
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -41,4 +43,58 @@ class MatchdayFixtureTest {
         assertThat(match.involvesClub("Sporting CP")).isTrue()
         assertThat(match.involvesClub("Benfica")).isFalse()
     }
+
+    @Test
+    fun filterByFavoriteClubShowsOnlyBenficaAcrossCompetitions() {
+        val games = listOf(
+            MatchdayFixture(
+                date = "2026-11-26",
+                time = "17:45",
+                home = "Viktoria Plzeň",
+                away = "Benfica",
+                round = "5.ª jornada",
+                competition = "Liga Europa",
+            ),
+            MatchdayFixture(
+                date = "2026-11-29",
+                time = "20:30",
+                home = "FC Porto",
+                away = "Sporting CP",
+                round = "12.ª jornada",
+            ),
+            MatchdayFixture(
+                date = "2026-12-05",
+                time = "18:00",
+                home = "Sport Lisboa e Benfica",
+                away = "SC Braga",
+                round = "13.ª jornada",
+            ),
+        )
+        val benficaOnly = matchdayFixturesForClub(games, "SL Benfica", onlyClub = true)
+        assertThat(benficaOnly).hasSize(2)
+        assertThat(benficaOnly.map { it.competition })
+            .containsExactly("Liga Europa", "Liga Portugal").inOrder()
+        assertThat(matchdayFixturesForClub(games, "SL Benfica", onlyClub = false))
+            .containsExactlyElementsIn(games).inOrder()
+    }
+
+    @Test
+    fun filterWithoutClubDoesNotHideGames() {
+        val games = listOf(
+            MatchdayFixture("2026-12-05", "18:00", "FC Porto", "SC Braga", null),
+        )
+        assertThat(matchdayFixturesForClub(games, null, onlyClub = true))
+            .containsExactlyElementsIn(games)
+    }
+
+    @Test
+    fun epgFavoriteClubTextMatchIsConservative() {
+        assertThat(matchdayProgrammeMentionsClub("UEFA: Benfica vs Viktoria Plzen", "SL Benfica"))
+            .isTrue()
+        assertThat(matchdayProgrammeMentionsClub("FC Porto vs Sporting", "SL Benfica"))
+            .isFalse()
+        assertThat(matchdayProgrammeMentionsClub("Sporting CP vs Braga", "Sporting CP"))
+            .isTrue()
+    }
+
 }
