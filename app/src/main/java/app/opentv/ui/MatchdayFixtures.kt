@@ -7,6 +7,9 @@
  *
  * Benfica: https://www.slbenfica.pt/pt-pt/agora/noticias/2026/08/29/futebol-benfica-calendario-jogos-fase-liga-liga-europa
  * UEFA: https://pt.uefa.com/uefaeuropaleague/clubs/50147--benfica/matches/
+ * Transmissão de Viktoria Plzeň–Benfica:
+ * https://www.sporttv.pt/noticias/871997/benfica-anuncia-bilhetes-para-visita-a-chequia
+ * (SPORT TV 5, informação publicada a 11/11/2026).
  *
  * A presença do jogo NÃO implica disponibilidade da transmissão.
  * Jogos e horários podem mudar; numa versão futura deve ser usada uma API
@@ -34,6 +37,9 @@ data class MatchdayFixture(
     val away: String,
     val round: String?,
     val competition: String = "Liga Portugal",
+    /** Emissora identificada numa fonte fiável, não inferida a partir de direitos gerais. */
+    val broadcastChannel: String? = null,
+    val broadcastSource: String? = null,
 )
 
 /** Identificadores de clubes variam entre calendários: "SL Benfica" e "Sport Lisboa e Benfica". */
@@ -66,6 +72,8 @@ private fun verifiedEuropeanFixtures(season: String): List<MatchdayFixture> {
             away = "Benfica",
             round = "5.ª jornada",
             competition = "Liga Europa",
+            broadcastChannel = "SPORT TV 5",
+            broadcastSource = "SPORT TV · 11/11/2026",
         ),
         MatchdayFixture(
             date = "2026-12-10",
