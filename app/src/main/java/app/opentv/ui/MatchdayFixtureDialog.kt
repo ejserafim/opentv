@@ -138,6 +138,12 @@ fun MatchdayFixtureDialog(
                     Spacer(Modifier.width(9.dp))
                     Text("FICHA DO JOGO", color = Highlight, fontSize = 13.sp, fontWeight = FontWeight.Black)
                 }
+                Text(
+                    fixture.competition + (fixture.round?.let { " · " + it } ?: ""),
+                    color = Highlight,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 Text(fixture.home, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                 Text("VS", color = Highlight, fontWeight = FontWeight.Black)
                 Text(fixture.away, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
@@ -148,11 +154,43 @@ fun MatchdayFixtureDialog(
                     color = InfoColor,
                     fontSize = 13.sp,
                 )
-                Text(
-                    "Canal de transmissão não confirmado. Podes associar manualmente um canal da tua lista.",
-                    color = InfoColor,
-                    fontSize = 12.sp,
-                )
+                if (fixture.broadcastChannel != null) {
+                    Text(
+                        "ONDE VER EM PORTUGAL",
+                        color = Highlight,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                    )
+                    Text(
+                        fixture.broadcastChannel,
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "Fonte: " + (fixture.broadcastSource ?: "publicação oficial") +
+                            ". Informação sujeita a alterações.",
+                        color = InfoColor,
+                        fontSize = 12.sp,
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            choosingChannel = true
+                            query = fixture.broadcastChannel
+                            onSearch(fixture.broadcastChannel)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Procurar " + fixture.broadcastChannel + " na minha lista")
+                    }
+                } else {
+                    Text(
+                        "Transmissão ainda não confirmada. Podes associar manualmente " +
+                            "um canal da tua lista.",
+                        color = InfoColor,
+                        fontSize = 12.sp,
+                    )
+                }
                 if (chosenId != null) {
                     Text("CANAL GUARDADO POR TI", color = Highlight, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     Text(chosenName ?: "Canal selecionado", color = Color.White, fontWeight = FontWeight.Bold)
