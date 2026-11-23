@@ -299,7 +299,14 @@ fun MatchdayModeScreen(
     var fixtureRevision by remember { mutableIntStateOf(0) }
     var clubPickerOpen by remember { mutableStateOf(false) }
     val availableClubs = remember(upcoming) {
-        upcoming.flatMap { listOf(it.home, it.away) }.distinct()
+        // Só clubes portugueses na escolha inicial; equipas europeias são adversárias,
+        // não novos clubes a seguir. O Benfica continua elegível sem o feed da Liga.
+        val leagueClubs = upcoming.filter { it.competition == "Liga Portugal" }
+            .flatMap { listOf(it.home, it.away) }
+        val europeanPortuguese = if (upcoming.any {
+                it.competition == "Liga Europa" && it.involvesClub("Benfica")
+            }) listOf("Sport Lisboa e Benfica") else emptyList()
+        (leagueClubs + europeanPortuguese).distinctBy(::matchdayTeamKey)
             .sortedWith(String.CASE_INSENSITIVE_ORDER)
     }
     val askNotifications = rememberLauncherForActivityResult(
@@ -415,7 +422,7 @@ fun MatchdayModeScreen(
                 )
                 Spacer(Modifier.height(9.dp))
                 Text(
-                    "Agenda da Liga Portugal, canais desportivos e programação em direto.",
+                    "Liga Portugal, Liga Europa e jogos em direto. Segue o teu clube em várias provas.",
                     color = MatchMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 14.dp),
@@ -502,8 +509,8 @@ fun MatchdayModeScreen(
                     )
                 }
                 Text(
-                    "Começamos pela Liga Portugal. O calendário é atualizado quando abres o Matchday Mode; " +
-                        "horários sujeitos a alterações.",
+                    "Acompanha os jogos disponíveis no calendário da Liga Portugal e os compromissos " +
+                        "europeus verificados. Outras provas dependem de nova integração.",
                     color = MatchMuted,
                     fontSize = 11.sp,
                 )
@@ -554,7 +561,7 @@ fun MatchdayModeScreen(
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Próximos jogos · Liga Portugal",
+                        "Próximos jogos · Todas as provas",
                         color = Color.White,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Black,
@@ -565,7 +572,7 @@ fun MatchdayModeScreen(
                     }
                 }
                 Text(
-                    "Calendário independente da programação IPTV · próximos 21 dias",
+                    "Liga Portugal e jogos europeus verificados · próximos 21 dias",
                     color = MatchMuted,
                     fontSize = 12.sp,
                 )
@@ -634,6 +641,15 @@ fun MatchdayModeScreen(
                     Spacer(Modifier.width(11.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
+                            fixture.competition +
+                                (fixture.round?.let { " · " + it } ?: ""),
+                            color = MatchGreen,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
                             fixture.home,
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
@@ -652,9 +668,19 @@ fun MatchdayModeScreen(
                             maxLines = 2,
                         )
                         Spacer(Modifier.height(5.dp))
+                        if (!fixture.broadcastChannel.isNullOrBlank()) {
+                            Text(
+                                "Onde ver: " + fixture.broadcastChannel + " · fonte: " +
+                                    (fixture.broadcastSource ?: "verificada"),
+                                color = MatchGreen,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 2,
+                            )
+                        }
                         Text(
-                            channelName?.let { "Escolhido: " + it }
-                                ?: "Escolher canal · Ativar aviso",
+                            channelName?.let { "Canal associado: " + it }
+                                ?: "Associar canal · Ativar aviso",
                             color = if (hasNotice || channelName != null) MatchGreen else MatchMuted,
                             fontSize = 11.sp,
                             maxLines = 2,
@@ -675,8 +701,10 @@ fun MatchdayModeScreen(
         }
         item(key = "fixtures-source") {
             Text(
-                "Fonte: OpenFootball (dados comunitários). Horários sujeitos a confirmação. " +
-                    "A presença de um jogo não significa que esteja disponível nos canais IPTV.",
+                "Fontes: OpenFootball (Liga Portugal), Benfica/UEFA (Liga Europa). " +
+                    "Os jogos europeus desta versão foram confirmados manualmente, não constituem " +
+                    "uma agenda automática de todas as provas. Horários sujeitos a alterações. " +
+                    "Ter uma emissora identificada não garante que o canal esteja na tua lista.",
                 color = MatchMuted,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(horizontal = 17.dp),
