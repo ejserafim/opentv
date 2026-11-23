@@ -1,13 +1,22 @@
 /*
  * Matchday Play — calendário independente do IPTV.
- * Dados: openfootball/football.json, domínio público (CC0).
- * https://github.com/openfootball/football.json
- * A presença no calendário NÃO implica disponibilidade de transmissão.
+ *
+ * Liga Portugal: openfootball/football.json (domínio público).
+ * Jogos europeus adicionais: calendário confirmado nas páginas oficiais do
+ * clube e da UEFA; são dados curados, não uma API dinâmica.
+ *
+ * Benfica: https://www.slbenfica.pt/pt-pt/agora/noticias/2026/08/29/futebol-benfica-calendario-jogos-fase-liga-liga-europa
+ * UEFA: https://pt.uefa.com/uefaeuropaleague/clubs/50147--benfica/matches/
+ *
+ * A presença do jogo NÃO implica disponibilidade da transmissão.
+ * Jogos e horários podem mudar; numa versão futura deve ser usada uma API
+ * de calendário licenciada, com sincronização e atualizações automáticas.
  * Base OpenTV GPL-3.0-or-later.
  */
 package app.opentv.ui
 
 import java.io.IOException
+import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -24,9 +33,55 @@ data class MatchdayFixture(
     val home: String,
     val away: String,
     val round: String?,
+    val competition: String = "Liga Portugal",
 )
 
-/** Primeira Liga da época corrente, sem qualquer credencial ou informação do cliente. */
+/** Identificadores de clubes variam entre calendários: "SL Benfica" e "Sport Lisboa e Benfica". */
+internal fun matchdayTeamKey(name: String): String {
+    val plain = Normalizer.normalize(name, Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+        .lowercase(Locale.ROOT)
+        .replace(Regex("[^a-z0-9]"), "")
+    return when (plain) {
+        "sportlisboaebenfica", "slbenfica", "benfica", "sportlisboaebenficasad" -> "benfica"
+        "sportingclubedeportugal", "sportingcp", "sporting", "sportinglisbon" -> "sporting"
+        "futebolclubedoporto", "fcporto", "porto" -> "porto"
+        "sportingclubedebraga", "scbraga", "braga" -> "braga"
+        else -> plain
+    }
+}
+
+fun MatchdayFixture.involvesClub(club: String): Boolean =
+    matchdayTeamKey(home) == matchdayTeamKey(club) ||
+        matchdayTeamKey(away) == matchdayTeamKey(club)
+
+/** Conjunto pequeno e verificável até existir uma integração oficial para todas as provas. */
+private fun verifiedEuropeanFixtures(season: String): List<MatchdayFixture> {
+    if (season != "2026-27") return emptyList()
+    return listOf(
+        MatchdayFixture(
+            date = "2026-11-26",
+            time = "17:45", // Portugal continental, confirmado pelo SL Benfica
+            home = "Viktoria Plzeň",
+            away = "Benfica",
+            round = "5.ª jornada",
+            competition = "Liga Europa",
+        ),
+        MatchdayFixture(
+            date = "2026-12-10",
+            time = "20:00", // Portugal continental, confirmado pelo SL Benfica
+            home = "Benfica",
+            away = "OFI Creta",
+            round = "6.ª jornada",
+            competition = "Liga Europa",
+        ),
+    )
+}
+
+/**
+ * Agenda dos próximos 21 dias: Liga Portugal (OpenFootball) + europeus confirmados.
+ * Se a liga estiver temporariamente indisponível, não escondemos os jogos europeus.
+ */
 class MatchdayFixtureSource(private val httpClient: OkHttpClient) {
     suspend fun upcoming(): List<MatchdayFixture> = withContext(Dispatchers.IO) {
         val portugal = TimeZone.getTimeZone("Europe/Lisbon")
@@ -35,9 +90,42 @@ class MatchdayFixtureSource(private val httpClient: OkHttpClient) {
         val startYear = if (calendar.get(Calendar.MONTH) < Calendar.JULY) year - 1 else year
         val season = startYear.toString() + "-" +
             ((startYear + 1) % 100).toString().padStart(2, '0')
+        val iso = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = portugal
+            isLenient = false
+        }
+        val today = iso.format(calendar.time)
+        calendar.add(Calendar.DAY_OF_YEAR, 21)
+        val end = iso.format(calendar.time)
+        val pattern = Regex("""\d{2}:\d{2}""")
+
+        val leagueFixtures = try {
+            loadPortugalLeague(season, today, end, pattern)
+        } catch (_: IOException) {
+            emptyList()
+        } catch (_: org.json.JSONException) {
+            emptyList()
+        }
+        val european = verifiedEuropeanFixtures(season)
+            .filter { it.date >= today && it.date <= end }
+        if (leagueFixtures.isEmpty() && european.isEmpty()) {
+            // A UI já sabe apresentar o erro, em vez de anunciar uma agenda completa.
+            throw IOException("Não foi possível carregar jogos para este período")
+        }
+        (leagueFixtures + european)
+            .distinctBy { it.date + matchdayTeamKey(it.home) + matchdayTeamKey(it.away) }
+            .sortedWith(compareBy<MatchdayFixture> { it.date }.thenBy { it.time ?: "99:99" })
+            .take(60)
+    }
+
+    private fun loadPortugalLeague(
+        season: String,
+        today: String,
+        end: String,
+        pattern: Regex,
+    ): List<MatchdayFixture> {
         val url = "https://raw.githubusercontent.com/openfootball/football.json/master/" +
             season + "/pt.1.json"
-
         val request = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
@@ -50,19 +138,9 @@ class MatchdayFixtureSource(private val httpClient: OkHttpClient) {
             }
             response.body?.string() ?: throw IOException("Resposta sem calendário")
         }
-
         val list = JSONObject(json).optJSONArray("matches")
-            ?: throw IOException("Formato não reconhecido")
-        val iso = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-            timeZone = portugal
-            isLenient = false
-        }
-        val today = iso.format(calendar.time)
-        calendar.add(Calendar.DAY_OF_YEAR, 21)
-        val end = iso.format(calendar.time)
-        val pattern = Regex("""\d{2}:\d{2}""")
-
-        buildList {
+            ?: throw IOException("Formato da Liga Portugal não reconhecido")
+        return buildList {
             for (index in 0 until list.length()) {
                 val item = list.optJSONObject(index) ?: continue
                 val date = item.optString("date").trim()
@@ -77,11 +155,10 @@ class MatchdayFixtureSource(private val httpClient: OkHttpClient) {
                         home = home,
                         away = away,
                         round = item.optString("round").takeIf { it.isNotBlank() },
+                        competition = "Liga Portugal",
                     ),
                 )
             }
-        }.distinctBy { it.date + it.home + it.away }
-            .sortedWith(compareBy<MatchdayFixture> { it.date }.thenBy { it.time ?: "99:99" })
-            .take(40)
+        }
     }
 }
