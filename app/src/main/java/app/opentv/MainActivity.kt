@@ -63,7 +63,7 @@ import app.opentv.ui.SourcesViewModel
 import app.opentv.ui.channels.ChannelManagerScreen
 import app.opentv.ui.channels.SearchScreen
 import app.opentv.ui.VodViewModel
-import app.opentv.ui.onboarding.AddSourceScreen
+import app.opentv.ui.onboarding.MatchdayLoginScreen
 import app.opentv.ui.player.PlayerScreen
 import app.opentv.ui.settings.AboutScreen
 import app.opentv.ui.settings.AppSettingsScreen
@@ -303,22 +303,13 @@ private fun OpenTvApp(isTelevision: Boolean) {
     Box(Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = start) {
             composable(Routes.ADD_SOURCE) {
-                AddSourceScreen(
+                MatchdayLoginScreen(
                     viewModel = sourcesViewModel,
                     onFinished = {
                         navController.navigate(Routes.HOME) {
                             popUpTo(Routes.ADD_SOURCE) { inclusive = true }
                         }
                     },
-                )
-            }
-
-            composable(Routes.EDIT_SOURCE) { entry ->
-                val sourceId = entry.arguments?.getString("sourceId")?.toLongOrNull() ?: return@composable
-                AddSourceScreen(
-                    viewModel = sourcesViewModel,
-                    editingSourceId = sourceId,
-                    onFinished = { navController.popBackStack() },
                 )
             }
 
@@ -431,21 +422,8 @@ private fun OpenTvApp(isTelevision: Boolean) {
                 ChannelManagerScreen(onBack = { navController.popBackStack() })
             }
 
-            composable(Routes.WEB_MANAGER) {
-                WebManagerScreen(onBack = { navController.popBackStack() })
-            }
-
             composable(Routes.PARENTAL) {
                 ParentalControlsScreen(onBack = { navController.popBackStack() })
-            }
-
-            composable(Routes.PROVIDERS) {
-                ProvidersScreen(
-                    viewModel = sourcesViewModel,
-                    onAddSource = { navController.navigate(Routes.ADD_SOURCE) },
-                    onEditSource = { src -> navController.navigate(Routes.editSource(src.id)) },
-                    onBack = { navController.popBackStack() },
-                )
             }
 
             composable(Routes.ADDONS) {
@@ -538,7 +516,7 @@ private fun OpenTvApp(isTelevision: Boolean) {
         }
 
         // Sits above the whole nav graph so a found update can prompt from any screen.
-        UpdateGate()
+        // Matchday Play has its own release process; do not offer upstream OpenTV APKs.
 
         // "About to switch to a recording" banner — shows 30s before an auto-switch fires.
         RecordingSwitchBanner()

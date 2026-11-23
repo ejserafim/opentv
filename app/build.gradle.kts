@@ -11,7 +11,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.opentv"
+        applicationId = "com.matchday.play"
         minSdk = 23
         targetSdk = 35
         versionCode = 22
