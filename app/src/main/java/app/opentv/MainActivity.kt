@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
                 // A living-room screen defaults to dark; a phone/tablet follows the system.
                 AppSettings.ThemeMode.SYSTEM -> isTelevision || isSystemInDarkTheme()
             }
-            OpenTvTheme(darkTheme = darkTheme) {
+            OpenTvTheme(darkTheme = true) // Matchday Play mantém contraste e cores de marca em mobile/TV {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
