@@ -87,13 +87,33 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
     private val settings = AppSettings.get(app)
     val categoryKey = MutableStateFlow<String?>(null)
     val favouritesOnly = MutableStateFlow(false)
+    private val fixtureSource = MatchdayFixtureSource(graph.httpClient)
+    val upcomingFixtures = MutableStateFlow<List<MatchdayFixture>>(emptyList())
+    val fixturesLoading = MutableStateFlow(false)
+    val fixturesError = MutableStateFlow<String?>(null)
     private val nowFlow = MutableStateFlow(System.currentTimeMillis())
 
     init {
+        refreshFixtures()
         viewModelScope.launch {
             while (isActive) {
                 delay(60_000)
                 nowFlow.value = System.currentTimeMillis()
+            }
+        }
+    }
+
+    fun refreshFixtures() {
+        if (fixturesLoading.value) return
+        viewModelScope.launch {
+            fixturesLoading.value = true
+            fixturesError.value = null
+            try {
+                upcomingFixtures.value = fixtureSource.upcoming()
+            } catch (_: Exception) {
+                fixturesError.value = "Não foi possível consultar a agenda externa."
+            } finally {
+                fixturesLoading.value = false
             }
         }
     }
@@ -192,6 +212,9 @@ fun MatchdayModeScreen(
     val choice by model.categoryKey.collectAsState()
     val onlyFavourites by model.favouritesOnly.collectAsState()
     val data by model.snapshot.collectAsState()
+    val upcoming by model.upcomingFixtures.collectAsState()
+    val fixturesLoading by model.fixturesLoading.collectAsState()
+    val fixturesError by model.fixturesError.collectAsState()
     BackHandler { onBack() }
 
     fun play(channel: Channel) {
@@ -229,7 +252,7 @@ fun MatchdayModeScreen(
                 )
                 Spacer(Modifier.height(9.dp))
                 Text(
-                    "Jogos identificados no guia e acesso rápido aos canais de desporto.",
+                    "Agenda da Liga Portugal, canais desportivos e programação em direto.",
                     color = MatchMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 14.dp),
@@ -276,10 +299,120 @@ fun MatchdayModeScreen(
                 }
             }
         }
+
+        item(key = "fixtures-heading") {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Próximos jogos · Liga Portugal",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = model::refreshFixtures, enabled = !fixturesLoading) {
+                        Text("Atualizar", color = MatchGreen)
+                    }
+                }
+                Text(
+                    "Calendário independente da programação IPTV · próximos 21 dias",
+                    color = MatchMuted,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+        if (upcoming.isEmpty()) {
+            item(key = "fixtures-empty") {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp)
+                        .clip(RoundedCornerShape(14.dp)).background(MatchCard).padding(16.dp),
+                ) {
+                    if (fixturesLoading) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = MatchGreen,
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text("A carregar próximos jogos…", color = Color.White)
+                        }
+                    } else {
+                        Text(
+                            fixturesError ?: "Sem partidas disponíveis para os próximos dias.",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "A agenda do fornecedor IPTV continua disponível abaixo.",
+                            color = MatchMuted,
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
+            }
+        } else {
+            items(upcoming, key = { "fixture-" + it.date + it.home + it.away }) { fixture ->
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MatchCard)
+                        .padding(horizontal = 14.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.width(66.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            fixture.date.substring(8, 10) + "/" + fixture.date.substring(5, 7),
+                            color = MatchGreen,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                        )
+                        Text(
+                            fixture.time ?: "A confirmar",
+                            color = MatchMuted,
+                            fontSize = if (fixture.time == null) 10.sp else 12.sp,
+                        )
+                    }
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            fixture.home,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                        )
+                        Text(
+                            "vs",
+                            color = MatchGreen,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                        )
+                        Text(
+                            fixture.away,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                        )
+                    }
+                    Icon(Icons.Filled.SportsSoccer, contentDescription = null, tint = MatchGreen)
+                }
+            }
+        }
+        item(key = "fixtures-source") {
+            Text(
+                "Fonte: OpenFootball (dados comunitários). Horários sujeitos a confirmação. " +
+                    "A presença de um jogo não significa que esteja disponível nos canais IPTV.",
+                color = MatchMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 17.dp),
+            )
+        }
+
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
-                Text("Agenda de futebol", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
-                Text("Programação disponível no EPG do fornecedor", color = MatchMuted, fontSize = 12.sp)
+                Text("Jogos na programação dos canais", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                Text("Informação EPG do teu fornecedor IPTV", color = MatchMuted, fontSize = 12.sp)
             }
         }
         if (data.events.isEmpty()) {
