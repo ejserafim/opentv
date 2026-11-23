@@ -61,6 +61,41 @@ fun MatchdayFixture.involvesClub(club: String): Boolean =
     matchdayTeamKey(home) == matchdayTeamKey(club) ||
         matchdayTeamKey(away) == matchdayTeamKey(club)
 
+/** Aplica o filtro de clube sem modificar a agenda nem as notificações guardadas. */
+fun matchdayFixturesForClub(
+    fixtures: List<MatchdayFixture>,
+    club: String?,
+    onlyClub: Boolean,
+): List<MatchdayFixture> =
+    if (onlyClub && !club.isNullOrBlank()) fixtures.filter { it.involvesClub(club) }
+    else fixtures
+
+/**
+ * O título EPG é texto livre, por isso este filtro é conservador: se o nome da
+ * equipa não aparecer no programa, não afirmamos que seja um jogo desse clube.
+ */
+fun matchdayProgrammeMentionsClub(title: String, club: String): Boolean {
+    val normalizedTitle = Normalizer.normalize(title, Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+        .lowercase(Locale.ROOT)
+    val alternatives = when (matchdayTeamKey(club)) {
+        "benfica" -> listOf("benfica")
+        "sporting" -> listOf("sporting")
+        "porto" -> listOf("porto")
+        "braga" -> listOf("braga")
+        else -> listOf(
+            Normalizer.normalize(club, Normalizer.Form.NFD)
+                .replace(Regex("\\p{Mn}+"), "")
+                .lowercase(Locale.ROOT)
+        )
+    }
+    return alternatives.any { name ->
+        Regex("(?<![a-z0-9])" + Regex.escape(name) + "(?![a-z0-9])")
+            .containsMatchIn(normalizedTitle)
+    }
+}
+
+
 /** Conjunto pequeno e verificável até existir uma integração oficial para todas as provas. */
 private fun verifiedEuropeanFixtures(season: String): List<MatchdayFixture> {
     if (season != "2026-27") return emptyList()
