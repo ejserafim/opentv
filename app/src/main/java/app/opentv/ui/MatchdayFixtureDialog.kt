@@ -62,6 +62,8 @@ private val InfoColor = Color(0xFFB6C9C5)
 fun MatchdayFixtureDialog(
     fixture: MatchdayFixture,
     channels: List<Channel>,
+    searchResults: List<Channel>,
+    onSearch: (String) -> Unit,
     onDismiss: () -> Unit,
     onChanged: () -> Unit,
     onPlay: (Channel) -> Unit,
@@ -176,16 +178,22 @@ fun MatchdayFixtureDialog(
                 if (choosingChannel) {
                     OutlinedTextField(
                         value = query,
-                        onValueChange = { query = it },
+                        onValueChange = {
+                            query = it
+                            onSearch(it)
+                        },
                         label = { Text("Procurar canal desportivo") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    val matches = channels.asSequence()
-                        .filter { query.isBlank() || it.shownName.contains(query, ignoreCase = true) }
-                        .take(24).toList()
+                    val matches = (if (query.isBlank()) channels else searchResults)
+                        .asSequence().take(24).toList()
                     if (matches.isEmpty()) {
-                        Text("Sem canais nesta pesquisa.", color = InfoColor)
+                        Text(
+                            if (query.isBlank()) "Escreve um canal, por exemplo Sport TV, DAZN ou BTV."
+                            else "Sem canais nesta pesquisa.",
+                            color = InfoColor,
+                        )
                     }
                     matches.forEach { channel ->
                         Row(
@@ -197,6 +205,7 @@ fun MatchdayFixtureDialog(
                                     )
                                     choosingChannel = false
                                     query = ""
+                                    onSearch("")
                                     refresh()
                                 }
                                 .padding(horizontal = 11.dp, vertical = 12.dp),
@@ -209,14 +218,13 @@ fun MatchdayFixtureDialog(
                 } else {
                     OutlinedButton(
                         onClick = { choosingChannel = true },
-                        enabled = channels.isNotEmpty(),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(if (chosenId != null) "Alterar canal" else "Escolher canal")
                     }
                     if (channels.isEmpty()) {
                         Text(
-                            "Ainda não existem canais desportivos disponíveis nesta seleção.",
+                            "Também podes procurar canais noutras categorias da tua lista.",
                             color = InfoColor, fontSize = 12.sp,
                         )
                     }
