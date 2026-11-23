@@ -5,6 +5,13 @@
 package app.opentv.ui
 
 import android.app.Application
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.activity.compose.BackHandler
@@ -92,6 +99,10 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
     val favouritesOnly = MutableStateFlow(false)
     private val pickerQuery = MutableStateFlow("")
     private val fixtureSource = MatchdayFixtureSource(graph.httpClient)
+    private val clubPrefs = app.getSharedPreferences("matchday_club_preferences", 0)
+    val favoriteClub = MutableStateFlow(clubPrefs.getString("favorite_club", null))
+    val autoClubAlerts = MutableStateFlow(clubPrefs.getBoolean("automatic_alerts", false))
+    val clubAlertsCount = MutableStateFlow(0)
     val upcomingFixtures = MutableStateFlow<List<MatchdayFixture>>(emptyList())
     val fixturesLoading = MutableStateFlow(false)
     val fixturesError = MutableStateFlow<String?>(null)
@@ -114,11 +125,45 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
             fixturesError.value = null
             try {
                 upcomingFixtures.value = fixtureSource.upcoming()
+                syncClubAlerts()
             } catch (_: Exception) {
                 fixturesError.value = "Não foi possível consultar a agenda externa."
             } finally {
                 fixturesLoading.value = false
             }
+        }
+    }
+
+    /** Guardados no dispositivo; clubes disponíveis nesta fase: Primeira Liga. */
+    fun chooseFavoriteClub(club: String?) {
+        if (favoriteClub.value == club) return
+        favoriteClub.value = club
+        clubPrefs.edit().putString("favorite_club", club).apply()
+        if (club == null) {
+            autoClubAlerts.value = false
+            clubPrefs.edit().putBoolean("automatic_alerts", false).apply()
+        }
+        MatchdayFixtureAlerts.resetAutomaticSkips(getApplication())
+        syncClubAlerts()
+    }
+
+    fun enableAutomaticClubAlerts(enabled: Boolean) {
+        if (enabled && favoriteClub.value == null) return
+        if (enabled && !autoClubAlerts.value) {
+            MatchdayFixtureAlerts.resetAutomaticSkips(getApplication())
+        }
+        autoClubAlerts.value = enabled
+        clubPrefs.edit().putBoolean("automatic_alerts", enabled).apply()
+        syncClubAlerts()
+    }
+
+    private fun syncClubAlerts() {
+        val club = favoriteClub.value.takeIf { autoClubAlerts.value }
+        val games = upcomingFixtures.value
+        viewModelScope.launch(Dispatchers.IO) {
+            clubAlertsCount.value = MatchdayFixtureAlerts.synchronizeAutomatic(
+                getApplication(), games, club,
+            )
         }
     }
 
