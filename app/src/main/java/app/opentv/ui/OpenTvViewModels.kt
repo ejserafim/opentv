@@ -110,6 +110,29 @@ class SourcesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Matchday Play: validate Xtream credentials before creating a local provider. */
+    fun loginMatchday(draft: Source, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _ui.value = _ui.value.copy(
+                testing = true,
+                testResult = null,
+                testError = null,
+                syncMessage = null,
+            )
+            val check = graph.sourceRepository.test(draft)
+            _ui.value = _ui.value.copy(testing = false)
+            if (check.isFailure) {
+                // Do not display underlying request URLs or server internals to the customer.
+                _ui.value = _ui.value.copy(
+                    testError = "Não foi possível iniciar sessão. Verifica os dados de acesso.",
+                )
+                onDone(false)
+                return@launch
+            }
+            saveAndSync(draft, onDone)
+        }
+    }
+
     /** Saves, then immediately pulls the catalogue so the user sees channels, not a spinner. */
     fun saveAndSync(draft: Source, onDone: (Boolean) -> Unit = {}) {
         viewModelScope.launch {

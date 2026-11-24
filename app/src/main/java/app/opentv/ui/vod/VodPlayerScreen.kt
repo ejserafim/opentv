@@ -57,6 +57,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -86,12 +89,17 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.opentv.R
+import app.opentv.isRunningOnTelevision
+import app.opentv.ui.MatchdayMobileBackOverlay
 import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
 import app.opentv.player.PlayerController
+import app.opentv.ui.player.matchdaySubtitleBottomFraction
+import app.opentv.ui.player.matchdayBurnedInVideoClearancePx
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -118,6 +126,7 @@ fun VodPlayerScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val isTelevision = remember(context) { isRunningOnTelevision(context) }
     val view = LocalView.current
     val graph = remember { ServiceLocator.get(context) }
     val settings = remember { graph.settings }
@@ -158,6 +167,33 @@ fun VodPlayerScreen(
     var scrubValue by remember { mutableFloatStateOf(0f) }
 
     var controlsVisible by remember { mutableStateOf(true) }
+    // Some movies have captions burned into the VIDEO pixels (not Media3 subtitle cues).
+    // Moving SubtitleView cannot move those captions: the entire video must be fitted into
+    // a safe picture area, above the system gesture bar and the measured transport controls.
+    var playerViewportHeightPx by remember { mutableIntStateOf(0) }
+    var screenHeightPx by remember { mutableIntStateOf(0) }
+    var transportHeightPx by remember { mutableIntStateOf(0) }
+    val playerDensity = LocalDensity.current
+    val systemBottomPx = WindowInsets.safeDrawing.getBottom(playerDensity)
+    val pictureMarginPx = with(playerDensity) { 18.dp.roundToPx() }
+    val videoClearancePx = matchdayBurnedInVideoClearancePx(
+        screenHeightPx = screenHeightPx,
+        systemBottomInsetPx = systemBottomPx,
+        transportHeightPx = transportHeightPx,
+        controlsVisible = controlsVisible,
+        isTelevision = isTelevision,
+        marginPx = pictureMarginPx,
+    )
+    // Optional external subtitle tracks still get a sensible baseline, but the frame
+    // itself now sits above the controls, so do NOT add the controls clearance twice.
+    val subtitleBottomFraction = matchdaySubtitleBottomFraction(
+        viewportHeightPx = playerViewportHeightPx,
+        systemBottomInsetPx = 0,
+        transportHeightPx = 0,
+        transportVisible = false,
+        televisionOrPip = isTelevision,
+        marginPx = pictureMarginPx,
+    )
     var interaction by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val barFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
@@ -261,12 +297,17 @@ fun VodPlayerScreen(
     }
 
     BackHandler {
-        val activelyPlaying = state is PlayerController.State.Playing ||
-            (growingRec && state is PlayerController.State.Buffering)
-        when {
-            vodPanel != VodPanel.NONE -> vodPanel = VodPanel.NONE
-            controlsVisible && activelyPlaying && !paused -> controlsVisible = false
-            else -> onBack()
+        if (!isTelevision) {
+            // Nos telemóveis o botão Voltar regressa imediatamente ao filme ou episódio.
+            onBack()
+        } else {
+            val activelyPlaying = state is PlayerController.State.Playing ||
+                (growingRec && state is PlayerController.State.Buffering)
+            when {
+                vodPanel != VodPanel.NONE -> vodPanel = VodPanel.NONE
+                controlsVisible && activelyPlaying && !paused -> controlsVisible = false
+                else -> onBack()
+            }
         }
     }
 
@@ -274,6 +315,7 @@ fun VodPlayerScreen(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .onSizeChanged { screenHeightPx = it.height }
             .onPreviewKeyEvent { event ->
                 when {
                     event.key == Key.Back || event.key == Key.Escape -> false
@@ -289,11 +331,17 @@ fun VodPlayerScreen(
             },
     ) {
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = with(playerDensity) { videoClearancePx.toDp() })
+                .onSizeChanged { playerViewportHeightPx = it.height },
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = controller.player
                     useController = false
+                    // Never crop the encoded frame: bottom credits and hard-coded subtitles
+                    // need to remain visible regardless of the phone's aspect ratio.
+                    if (!isTelevision) resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     subtitleView?.setUserDefaultStyle()
                     subtitleView?.setUserDefaultTextSize()
                     layoutParams = ViewGroup.LayoutParams(
@@ -301,6 +349,10 @@ fun VodPlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                 }
+            },
+            update = {
+                if (!isTelevision) it.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                it.subtitleView?.setBottomPaddingFraction(subtitleBottomFraction)
             },
         )
 
@@ -334,6 +386,11 @@ fun VodPlayerScreen(
             else -> Unit
         }
 
+        // Os controlos de filme/série e o botão Voltar partilham visibilidade.
+        if (!isTelevision && controlsVisible) {
+            MatchdayMobileBackOverlay(onBack = onBack)
+        }
+
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
@@ -343,6 +400,7 @@ fun VodPlayerScreen(
             Column(
                 Modifier
                     .fillMaxWidth()
+                    .onSizeChanged { transportHeightPx = it.height }
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))))
                     // Keep the controls clear of the phone/tablet system nav bar (and the side nav
                     // bar / display cutout in landscape). Zero on a TV, so the 10-foot layout is

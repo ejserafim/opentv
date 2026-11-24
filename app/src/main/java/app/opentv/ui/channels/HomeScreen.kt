@@ -136,6 +136,21 @@ fun HomeScreen(
     // empty. Drives the choice between the loading spinner and a recoverable error below.
     val channelsPresent by viewModel.channelsPresent.collectAsState()
 
+    // Interface específica de telemóvel: categorias e canais em ecrãs separados.
+    // O guia horizontal com d-pad continua a ser usado apenas na televisão.
+    if (!isTelevision) {
+        MatchdayMobileChannels(
+            viewModel = viewModel,
+            hasSources = hasSources,
+            isSyncing = isSyncing,
+            channelsPresent = channelsPresent,
+            onPlayChannel = onPlayChannel,
+            onAddSource = onAddSource,
+            onRefresh = onRefresh,
+        )
+        return
+    }
+
     // Two separate ideas, on purpose:
     //  - highlightedRow: where the d-pad is in the grid. Moves freely with up/down.
     //  - selectedRow: what the preview pane plays. Only changes when you press OK, so scrolling

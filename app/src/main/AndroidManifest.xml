@@ -54,8 +54,8 @@
     <application
         android:name=".OpenTvApp"
         android:allowBackup="true"
-        android:banner="@drawable/banner"
-        android:icon="@drawable/ic_launcher"
+        android:banner="@drawable/matchday_tv_banner"
+        android:icon="@drawable/matchday_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.OpenTV"
@@ -118,6 +118,15 @@
         <!-- Fires a programme reminder when its alarm goes off; re-arms reminders after a reboot. -->
         <receiver
             android:name=".reminders.ReminderAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Lembretes de futebol independentes do EPG, reagendados após reinício. -->
+        <receiver
+            android:name=".ui.MatchdayFixtureAlarmReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -104,6 +104,25 @@ fun MainScreen(
     onPlayCatchup: (mediaKey: String, url: String, title: String, ua: String) -> Unit,
     activeProfileName: String,
 ) {
+    // Em Android móvel usamos navegação inferior; o menu lateral é reservado à TV.
+    if (!isTelevision) {
+        MatchdayMobileMainScreen(
+            hasSources = hasSources,
+            isSyncing = isSyncing,
+            onPlayChannel = onPlayChannel,
+            onOpenMovie = onOpenMovie,
+            onOpenSeries = onOpenSeries,
+            onResume = onResume,
+            onAddSource = onAddSource,
+            onRefresh = onRefresh,
+            onOpenSearch = onOpenSearch,
+            onOpenSettings = onOpenSettings,
+            onOpenProfiles = onOpenProfiles,
+            onPlayRecording = onPlayRecording,
+            onPlayCatchup = onPlayCatchup,
+        )
+        return
+    }
     // Content-type toggles: a switched-off type has its tab hidden here (and its sync skipped in
     // CatalogRepository). Recordings is never a content type, so it always stays — which also means
     // there is always at least one tab and never a blank shell, even with all three types off.
