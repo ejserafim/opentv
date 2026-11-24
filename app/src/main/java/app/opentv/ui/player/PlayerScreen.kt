@@ -191,14 +191,6 @@ fun PlayerScreen(
     val subtitleDensity = LocalDensity.current
     val subtitleSystemBottomPx = WindowInsets.safeDrawing.getBottom(subtitleDensity)
     val subtitleMarginPx = with(subtitleDensity) { 36.dp.roundToPx() }
-    val subtitleBottomFraction = matchdaySubtitleBottomFraction(
-        viewportHeightPx = subtitleViewportHeightPx,
-        systemBottomInsetPx = subtitleSystemBottomPx,
-        transportHeightPx = subtitleTransportHeightPx,
-        transportVisible = controlsVisible && !inPip,
-        televisionOrPip = isTelevision || inPip,
-        marginPx = subtitleMarginPx,
-    )
     var panel by remember { mutableStateOf(Panel.NONE) }
     var channelListVisible by remember { mutableStateOf(false) }
     var interaction by remember { mutableIntStateOf(0) }
@@ -209,6 +201,14 @@ fun PlayerScreen(
     // Picture-in-picture. While the player is on it is "eligible" to shrink to a floating window
     // (pressing Home does it, handled in MainActivity); [inPip] drives hiding all the chrome.
     val inPip by app.opentv.core.PipState.inPip.collectAsState()
+    val subtitleBottomFraction = matchdaySubtitleBottomFraction(
+        viewportHeightPx = subtitleViewportHeightPx,
+        systemBottomInsetPx = subtitleSystemBottomPx,
+        transportHeightPx = subtitleTransportHeightPx,
+        transportVisible = controlsVisible && !inPip,
+        televisionOrPip = isTelevision || inPip,
+        marginPx = subtitleMarginPx,
+    )
     val pipSupported = remember {
         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
             context.packageManager.hasSystemFeature(
