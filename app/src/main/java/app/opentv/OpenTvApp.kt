@@ -60,6 +60,13 @@ class OpenTvApp : Application(), ImageLoaderFactory {
         super.onCreate()
         val graph = ServiceLocator.get(this)
         SyncWorker.schedule(this)
+        // Automatic club reminders survive app restarts and update on a network-enabled
+        // WorkManager cycle only when the user explicitly opted into them.
+        app.opentv.ui.MatchdayFixtureSyncWorker.configure(this)
+        // App updates/force-stop can invalidate alarm registrations; re-arm the local ones.
+        appScope.launch {
+            runCatching { app.opentv.ui.MatchdayFixtureAlerts.reschedule(this@OpenTvApp) }
+        }
 
         // When the normaliser has moved on since the catalogue was last processed, re-clean
         // the stored channels and re-run the guide matcher — locally, no re-download. This
