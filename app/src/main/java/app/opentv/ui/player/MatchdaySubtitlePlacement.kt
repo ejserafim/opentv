@@ -24,9 +24,10 @@ internal fun matchdaySubtitleBottomFraction(
     if (televisionOrPip) return 0.08f
     if (viewportHeightPx <= 0) return 0.16f
 
-    // Extra room below two-line captions when the controls have faded away.
+    // Keep two-line captions above Android's gesture bar without placing them
+    // unnecessarily high once the controls have faded out.
     val safelyAboveSystemBarPx = systemBottomInsetPx.coerceAtLeast(0) +
-        (marginPx * 2).coerceAtLeast(0)
+        marginPx.coerceAtLeast(0)
 
     // The entire Compose controls panel, including seek bar and insets, is reserved.
     val safelyAboveControlsPx =
@@ -34,5 +35,5 @@ internal fun matchdaySubtitleBottomFraction(
         else 0
 
     val clearance = maxOf(safelyAboveSystemBarPx, safelyAboveControlsPx)
-    return (clearance.toFloat() / viewportHeightPx).coerceIn(0.13f, 0.75f)
+    return (clearance.toFloat() / viewportHeightPx).coerceIn(0.16f, 0.75f)
 }
