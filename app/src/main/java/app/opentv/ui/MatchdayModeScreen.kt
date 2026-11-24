@@ -105,9 +105,12 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
     val favoriteClub = MutableStateFlow(clubPrefs.getString("favorite_club", null))
     val autoClubAlerts = MutableStateFlow(clubPrefs.getBoolean("automatic_alerts", false))
     val clubAlertsCount = MutableStateFlow(0)
-    val upcomingFixtures = MutableStateFlow<List<MatchdayFixture>>(emptyList())
+    // Local snapshot is displayed immediately while the network source updates.
+    val upcomingFixtures = MutableStateFlow(MatchdayFixtureCache.read(app))
+    val calendarLastUpdated = MutableStateFlow(MatchdayFixtureCache.lastUpdatedMillis(app))
     val fixturesLoading = MutableStateFlow(false)
     val fixturesError = MutableStateFlow<String?>(null)
+    val usingOfflineLeague = MutableStateFlow(false)
     private val nowFlow = MutableStateFlow(System.currentTimeMillis())
 
     init {
@@ -126,10 +129,28 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
             fixturesLoading.value = true
             fixturesError.value = null
             try {
-                upcomingFixtures.value = fixtureSource.upcoming()
+                val fetched = fixtureSource.upcoming()
+                val leagueLoaded = fixtureSource.lastLeagueLoadSucceeded
+                val cache = MatchdayFixtureCache.read(getApplication())
+                upcomingFixtures.value = matchdayDisplayMerge(
+                    fetched = fetched,
+                    cached = cache,
+                    leagueLoaded = leagueLoaded,
+                )
+                usingOfflineLeague.value = !leagueLoaded && cache.any {
+                    it.competition == "Liga Portugal"
+                }
+                if (leagueLoaded) {
+                    MatchdayFixtureCache.save(getApplication(), fetched)
+                    calendarLastUpdated.value = MatchdayFixtureCache.lastUpdatedMillis(getApplication())
+                }
                 syncClubAlerts()
             } catch (_: Exception) {
-                fixturesError.value = "Não foi possível consultar a agenda externa."
+                usingOfflineLeague.value = upcomingFixtures.value.isNotEmpty()
+                fixturesError.value =
+                    if (upcomingFixtures.value.isEmpty())
+                        "Não foi possível consultar o calendário. Verifica a ligação."
+                    else "Sem ligação à agenda. A mostrar jogos guardados."
             } finally {
                 fixturesLoading.value = false
             }
@@ -147,6 +168,7 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
         }
         MatchdayFixtureAlerts.cancelAutomaticReminders(getApplication())
         MatchdayFixtureAlerts.resetAutomaticSkips(getApplication())
+        MatchdayFixtureSyncWorker.configure(getApplication())
         syncClubAlerts()
     }
 
@@ -157,6 +179,7 @@ class MatchdayModeViewModel(app: Application) : AndroidViewModel(app) {
         }
         autoClubAlerts.value = enabled
         clubPrefs.edit().putBoolean("automatic_alerts", enabled).apply()
+        MatchdayFixtureSyncWorker.configure(getApplication())
         syncClubAlerts()
     }
 
@@ -300,6 +323,8 @@ fun MatchdayModeScreen(
     val upcoming by model.upcomingFixtures.collectAsState()
     val fixturesLoading by model.fixturesLoading.collectAsState()
     val fixturesError by model.fixturesError.collectAsState()
+    val usingOfflineLeague by model.usingOfflineLeague.collectAsState()
+    val calendarLastUpdated by model.calendarLastUpdated.collectAsState()
     val favoriteClub by model.favoriteClub.collectAsState()
     val autoClubAlerts by model.autoClubAlerts.collectAsState()
     val clubAlertsCount by model.clubAlertsCount.collectAsState()
@@ -528,8 +553,8 @@ fun MatchdayModeScreen(
                     )
                 }
                 Text(
-                    "Acompanha os jogos disponíveis no calendário da Liga Portugal e os compromissos " +
-                        "europeus verificados. Outras provas dependem de nova integração.",
+                    "Os avisos do teu clube são atualizados em segundo plano quando há ligação à " +
+                        "internet. A Liga Europa ainda depende de partidas verificadas manualmente.",
                     color = MatchMuted,
                     fontSize = 11.sp,
                 )
@@ -584,6 +609,21 @@ fun MatchdayModeScreen(
                     color = MatchMuted,
                     fontSize = 12.sp,
                 )
+                if (calendarLastUpdated > 0L) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (usingOfflineLeague)
+                            "Liga em cache · última atualização: " +
+                                SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
+                                    .format(Date(calendarLastUpdated))
+                        else
+                            "Agenda guardada · atualizada: " +
+                                SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
+                                    .format(Date(calendarLastUpdated)),
+                        color = if (usingOfflineLeague) Color(0xFFF5CC75) else MatchMuted,
+                        fontSize = 11.sp,
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

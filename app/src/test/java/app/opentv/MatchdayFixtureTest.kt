@@ -7,6 +7,7 @@ package app.opentv
 import app.opentv.ui.MatchdayFixture
 import app.opentv.ui.involvesClub
 import app.opentv.ui.matchdayTeamKey
+import app.opentv.ui.matchdayDisplayMerge
 import app.opentv.ui.matchdayFixturesForClub
 import app.opentv.ui.matchdayProgrammeMentionsClub
 import com.google.common.truth.Truth.assertThat
@@ -95,6 +96,31 @@ class MatchdayFixtureTest {
             .isFalse()
         assertThat(matchdayProgrammeMentionsClub("Sporting CP vs Braga", "Sporting CP"))
             .isTrue()
+    }
+
+
+    @Test
+    fun offlineLeagueCacheSurvivesWithNewEuropeanFixtures() {
+        val league = MatchdayFixture(
+            "2026-12-02", "20:00", "SL Benfica", "SC Braga",
+            null, "Liga Portugal",
+        )
+        val europe = MatchdayFixture(
+            "2026-12-10", "20:00", "Benfica", "OFI Creta",
+            null, "Liga Europa",
+        )
+        assertThat(matchdayDisplayMerge(listOf(europe), listOf(league), false))
+            .containsExactly(league, europe).inOrder()
+        assertThat(matchdayDisplayMerge(listOf(europe), listOf(league), true))
+            .containsExactly(europe)
+    }
+
+    @Test
+    fun refreshedMatchTakesPriorityOverCachedDuplicate() {
+        val old = MatchdayFixture("2026-12-02", "19:00", "Benfica", "Braga", null)
+        val updated = old.copy(time = "20:00")
+        assertThat(matchdayDisplayMerge(listOf(updated), listOf(old), false))
+            .containsExactly(updated)
     }
 
 }

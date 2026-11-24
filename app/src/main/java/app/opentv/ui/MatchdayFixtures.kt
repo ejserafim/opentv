@@ -96,6 +96,23 @@ fun matchdayProgrammeMentionsClub(title: String, club: String): Boolean {
 }
 
 
+/**
+ * Combina o último campeonato guardado com dados recentes quando o serviço
+ * OpenFootball está temporariamente indisponível. Nunca usa o cache como fonte
+ * para afirmar que os horários foram confirmados.
+ */
+fun matchdayDisplayMerge(
+    fetched: List<MatchdayFixture>,
+    cached: List<MatchdayFixture>,
+    leagueLoaded: Boolean,
+): List<MatchdayFixture> {
+    val fallbackLeague = if (leagueLoaded) emptyList()
+        else cached.filter { it.competition == "Liga Portugal" }
+    return (fetched + fallbackLeague)
+        .distinctBy { it.date + "|" + matchdayTeamKey(it.home) + "|" + matchdayTeamKey(it.away) }
+        .sortedWith(compareBy<MatchdayFixture> { it.date }.thenBy { it.time ?: "99:99" })
+}
+
 /** Conjunto pequeno e verificável até existir uma integração oficial para todas as provas. */
 private fun verifiedEuropeanFixtures(season: String): List<MatchdayFixture> {
     if (season != "2026-27") return emptyList()
