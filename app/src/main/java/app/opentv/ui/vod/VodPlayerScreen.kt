@@ -57,6 +57,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -94,6 +97,7 @@ import app.opentv.core.ServiceLocator
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
 import app.opentv.player.PlayerController
+import app.opentv.ui.player.matchdaySubtitleBottomFraction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -161,6 +165,21 @@ fun VodPlayerScreen(
     var scrubValue by remember { mutableFloatStateOf(0f) }
 
     var controlsVisible by remember { mutableStateOf(true) }
+    // PlayerView is full-bleed, unlike the Compose transport. Media3 subtitle cues need
+    // their own bottom inset, and the measured transport height while controls are shown.
+    var subtitleViewportHeightPx by remember { mutableIntStateOf(0) }
+    var subtitleTransportHeightPx by remember { mutableIntStateOf(0) }
+    val subtitleDensity = LocalDensity.current
+    val subtitleSystemBottomPx = WindowInsets.safeDrawing.getBottom(subtitleDensity)
+    val subtitleMarginPx = with(subtitleDensity) { 36.dp.roundToPx() }
+    val subtitleBottomFraction = matchdaySubtitleBottomFraction(
+        viewportHeightPx = subtitleViewportHeightPx,
+        systemBottomInsetPx = subtitleSystemBottomPx,
+        transportHeightPx = subtitleTransportHeightPx,
+        transportVisible = controlsVisible,
+        televisionOrPip = isTelevision,
+        marginPx = subtitleMarginPx,
+    )
     var interaction by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val barFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
@@ -297,7 +316,9 @@ fun VodPlayerScreen(
             },
     ) {
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().onSizeChanged {
+                subtitleViewportHeightPx = it.height
+            },
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = controller.player
@@ -309,6 +330,9 @@ fun VodPlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                 }
+            },
+            update = {
+                it.subtitleView?.setBottomPaddingFraction(subtitleBottomFraction)
             },
         )
 
@@ -356,6 +380,7 @@ fun VodPlayerScreen(
             Column(
                 Modifier
                     .fillMaxWidth()
+                    .onSizeChanged { subtitleTransportHeightPx = it.height }
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))))
                     // Keep the controls clear of the phone/tablet system nav bar (and the side nav
                     // bar / display cutout in landscape). Zero on a TV, so the 10-foot layout is
