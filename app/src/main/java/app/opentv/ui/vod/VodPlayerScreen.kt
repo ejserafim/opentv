@@ -89,6 +89,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.opentv.R
 import app.opentv.isRunningOnTelevision
@@ -98,6 +99,7 @@ import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
 import app.opentv.player.PlayerController
 import app.opentv.ui.player.matchdaySubtitleBottomFraction
+import app.opentv.ui.player.matchdayBurnedInVideoClearancePx
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -165,20 +167,32 @@ fun VodPlayerScreen(
     var scrubValue by remember { mutableFloatStateOf(0f) }
 
     var controlsVisible by remember { mutableStateOf(true) }
-    // PlayerView is full-bleed, unlike the Compose transport. Media3 subtitle cues need
-    // their own bottom inset, and the measured transport height while controls are shown.
-    var subtitleViewportHeightPx by remember { mutableIntStateOf(0) }
-    var subtitleTransportHeightPx by remember { mutableIntStateOf(0) }
-    val subtitleDensity = LocalDensity.current
-    val subtitleSystemBottomPx = WindowInsets.safeDrawing.getBottom(subtitleDensity)
-    val subtitleMarginPx = with(subtitleDensity) { 36.dp.roundToPx() }
+    // Some movies have captions burned into the VIDEO pixels (not Media3 subtitle cues).
+    // Moving SubtitleView cannot move those captions: the entire video must be fitted into
+    // a safe picture area, above the system gesture bar and the measured transport controls.
+    var playerViewportHeightPx by remember { mutableIntStateOf(0) }
+    var screenHeightPx by remember { mutableIntStateOf(0) }
+    var transportHeightPx by remember { mutableIntStateOf(0) }
+    val playerDensity = LocalDensity.current
+    val systemBottomPx = WindowInsets.safeDrawing.getBottom(playerDensity)
+    val pictureMarginPx = with(playerDensity) { 18.dp.roundToPx() }
+    val videoClearancePx = matchdayBurnedInVideoClearancePx(
+        screenHeightPx = screenHeightPx,
+        systemBottomInsetPx = systemBottomPx,
+        transportHeightPx = transportHeightPx,
+        controlsVisible = controlsVisible,
+        isTelevision = isTelevision,
+        marginPx = pictureMarginPx,
+    )
+    // Optional external subtitle tracks still get a sensible baseline, but the frame
+    // itself now sits above the controls, so do NOT add the controls clearance twice.
     val subtitleBottomFraction = matchdaySubtitleBottomFraction(
-        viewportHeightPx = subtitleViewportHeightPx,
-        systemBottomInsetPx = subtitleSystemBottomPx,
-        transportHeightPx = subtitleTransportHeightPx,
-        transportVisible = controlsVisible,
+        viewportHeightPx = playerViewportHeightPx,
+        systemBottomInsetPx = 0,
+        transportHeightPx = 0,
+        transportVisible = false,
         televisionOrPip = isTelevision,
-        marginPx = subtitleMarginPx,
+        marginPx = pictureMarginPx,
     )
     var interaction by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val barFocus = remember { FocusRequester() }
@@ -301,6 +315,7 @@ fun VodPlayerScreen(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .onSizeChanged { screenHeightPx = it.height }
             .onPreviewKeyEvent { event ->
                 when {
                     event.key == Key.Back || event.key == Key.Escape -> false
@@ -316,13 +331,17 @@ fun VodPlayerScreen(
             },
     ) {
         AndroidView(
-            modifier = Modifier.fillMaxSize().onSizeChanged {
-                subtitleViewportHeightPx = it.height
-            },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = with(playerDensity) { videoClearancePx.toDp() })
+                .onSizeChanged { playerViewportHeightPx = it.height },
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = controller.player
                     useController = false
+                    // Never crop the encoded frame: bottom credits and hard-coded subtitles
+                    // need to remain visible regardless of the phone's aspect ratio.
+                    if (!isTelevision) resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     subtitleView?.setUserDefaultStyle()
                     subtitleView?.setUserDefaultTextSize()
                     layoutParams = ViewGroup.LayoutParams(
@@ -332,6 +351,7 @@ fun VodPlayerScreen(
                 }
             },
             update = {
+                if (!isTelevision) it.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 it.subtitleView?.setBottomPaddingFraction(subtitleBottomFraction)
             },
         )
@@ -380,7 +400,7 @@ fun VodPlayerScreen(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .onSizeChanged { subtitleTransportHeightPx = it.height }
+                    .onSizeChanged { transportHeightPx = it.height }
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))))
                     // Keep the controls clear of the phone/tablet system nav bar (and the side nav
                     // bar / display cutout in landscape). Zero on a TV, so the 10-foot layout is

@@ -37,3 +37,35 @@ internal fun matchdaySubtitleBottomFraction(
     val clearance = maxOf(safelyAboveSystemBarPx, safelyAboveControlsPx)
     return (clearance.toFloat() / viewportHeightPx).coerceIn(0.16f, 0.75f)
 }
+
+
+/**
+ * Reserved black letterbox BELOW the actual encoded picture on mobile VOD.
+ *
+ * Hard-coded subtitles are video pixels; only resizing / fitting the whole video
+ * keeps them visible. Reserving the measured transport height stops our custom
+ * Compose playback controls from covering the bottom of that picture.
+ *
+ * We deliberately do NOT apply this to Android TV, which keeps the old layout.
+ */
+internal fun matchdayBurnedInVideoClearancePx(
+    screenHeightPx: Int,
+    systemBottomInsetPx: Int,
+    transportHeightPx: Int,
+    controlsVisible: Boolean,
+    isTelevision: Boolean,
+    marginPx: Int,
+): Int {
+    if (isTelevision) return 0
+    val safeMargin = marginPx.coerceAtLeast(0)
+    val safeInset = systemBottomInsetPx.coerceAtLeast(0)
+    val minimumClearance = safeInset + safeMargin * 2
+    val wanted = if (controlsVisible && transportHeightPx > 0) {
+        maxOf(minimumClearance, transportHeightPx + safeMargin)
+    } else minimumClearance
+
+    // Track pickers can be taller than the screen. Keep some movie visible even
+    // while a picker is open; the picker itself may cover the remainder temporarily.
+    return if (screenHeightPx > 0) wanted.coerceAtMost((screenHeightPx * 0.72f).toInt())
+    else minimumClearance
+}

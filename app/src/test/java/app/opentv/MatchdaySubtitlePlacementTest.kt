@@ -5,6 +5,7 @@
 package app.opentv
 
 import app.opentv.ui.player.matchdaySubtitleBottomFraction
+import app.opentv.ui.player.matchdayBurnedInVideoClearancePx
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -54,4 +55,33 @@ class MatchdaySubtitlePlacementTest {
         assertThat(matchdaySubtitleBottomFraction(0, 30, 0, true, false, 40))
             .isEqualTo(0.16f)
     }
+
+    @Test
+    fun burnedInSubtitlesStayOutOfTheAndroidGestureBar() {
+        assertThat(
+            matchdayBurnedInVideoClearancePx(720, 30, 220, false, false, 20),
+        ).isEqualTo(70)
+    }
+
+    @Test
+    fun burnedInSubtitlesMoveOutOfTheMeasuredTransportPanel() {
+        assertThat(
+            matchdayBurnedInVideoClearancePx(720, 30, 220, true, false, 20),
+        ).isEqualTo(240)
+    }
+
+    @Test
+    fun androidTVDoesNotShrinkItsVideoFrame() {
+        assertThat(
+            matchdayBurnedInVideoClearancePx(720, 30, 220, true, true, 20),
+        ).isEqualTo(0)
+    }
+
+    @Test
+    fun giantTrackPickerCannotHideTheWholeVideo() {
+        assertThat(
+            matchdayBurnedInVideoClearancePx(720, 30, 1000, true, false, 20),
+        ).isEqualTo((720 * 0.72f).toInt())
+    }
+
 }
